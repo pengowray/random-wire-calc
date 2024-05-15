@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Random Wire Calculator [VK3PGO]</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .checkboxes {
+            margin-bottom: 10px;
+        }
+        .plot {
+            width: 100%;
+            height: 800px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+        #ve3eedContainer {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Random Wire Calculator [VK3PGO]</h1>
+
+<div class="controls">
+    <div class="checkboxes">
+        <label><input type="checkbox" id="160m" checked> 160m Band</label>
+        <label><input type="checkbox" id="80m" checked> 80m Band</label>
+        <label><input type="checkbox" id="60m"> 60m Band</label>
+        <label><input type="checkbox" id="40m" checked> 40m Band</label>
+        <label><input type="checkbox" id="30m" checked> 30m Band</label>
+        <label><input type="checkbox" id="20m" checked> 20m Band</label>
+        <label><input type="checkbox" id="17m" checked> 17m Band</label>
+        <label><input type="checkbox" id="15m" checked> 15m Band</label>
+        <label><input type="checkbox" id="12m" checked> 12m Band</label>
+        <label><input type="checkbox" id="10m" checked> 10m Band</label>
+        <label><input type="checkbox" id="6m"> 6m Band</label>
+    </div>
+    <label for="velocityFactor">Velocity Factor: </label>
+    <input type="text" id="velocityFactor" value="0.95">
+    <label for="numResults">Number of Results: </label>
+    <input type="number" id="numResults" value="25" min="1">
+    <label for="minWireM">Min wire length (m): </label>
+    <input type="number" id="minWireM" value="5" min="0">
+    <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz axis</label>
+    <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
+    <label id="ve3eedContainer"><input type="checkbox" id="ve3eedToggle" onchange="toggleVe3eed()"> see VE3EED recommendations</label>
+</div>
+
+<div id="plot" class="plot"></div>
+
+<table id="resultsTable">
+    <thead>
+        <tr>
+            <th onclick="sortTable(0)">Pos</th>
+            <th onclick="sortTable(1)">Rank</th>
+            <th onclick="sortTable(0)">Length (m)</th>
+            <th onclick="sortTable(0)">Length (ft in)</th>
+            <th onclick="sortTable(4)">Conflicts</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<footer>
+    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack <a onclick="easterEgg()">VE3EED</a> (SK). This work is licensed under a Creative Commons Attribution 4.0 International License (or optionally MIT). | Built with Plotly.js</p>
+</footer>
+
+<script>
+const speedOfLight = 299792458;
+const ve3eedNumbers = "29  35.5  41  58  71  84  107  119  148  203  347  407  423"; // feet
+const maxFreq = 1.6; // has vf applied to it
+
+const frequencyRanges = {
+    "160m": [1.8, 2.0],
+    "80m": [3.5, 4.0],
+    "60m": [5.3, 5.4],
+    "40m": [7.0, 7.3],
+    "30m": [10.1, 10.15],
+    "20m": [14.0, 14.35],
+    "17m": [18.068, 18.168],
+    "15m": [21.0, 21.45],
+    "12m": [24.89, 24.99],
+    "10m": [28.0, 29.7],
+    "6m": [50.0, 54.0]
+};
+
+const factors = [
+    { value: 1/2, penalty: 10, type: 'fraction' },
+    { value: 1/4, penalty: 9, type: 'fraction' },
+    { value: 3/4, penalty: 8, type: 'fraction' },
+    { value: 1, penalty: 7, type: 'fraction', highlight: true },
+    { value: 5/8, penalty: 6, type: 'fraction' },
+    { value: 1/3, penalty: 5, type: 'fraction' },
+    { value: 2/3, penalty: 5, type: 'fraction' },
+    { value: 1/5, penalty: 4, type: 'fraction' },
+    { value: 2/5, penalty: 4, type: 'fraction' },
+    { value: 2, penalty: 6, type: 'multiple' },
+    { value: 3, penalty: 5, type: 'multiple' },
+    { value: 4, penalty: 4, type: 'multiple' },
+    { value: 5, penalty: 3, type: 'multiple' },
+    { value: 6, penalty: 2, type: 'multiple' },
+    { value: 7, penalty: 2, type: 'multiple' },
+    { value: 8, penalty: 1, type: 'multiple' },
+    { value: 9, penalty: 1, type: 'multiple' },
+    { value: 10, penalty: 1, type: 'multiple' },
+    { value: 11, penalty: 0.6, type: 'multiple' },
+    { value: 12, penalty: 0.6, type: 'multiple' },
+    { value: 13, penalty: 0.6, type: 'multiple' },
+    { value: 14, penalty: 0.6, type: 'multiple' },
+    { value: 15, penalty: 0.6, type: 'multiple' },
+    { value: 16, penalty: 0.6, type: 'multiple' },
+    { value: 17, penalty: 0.6, type: 'multiple' },
+    { value: 18, penalty: 0.6, type: 'multiple' },
+    { value: 19, penalty: 0.6, type: 'multiple' },
+    { value: 20, penalty: 0.6, type: 'multiple' }
+];
+
+//let currentUnit = 'meters';
+let currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
+let ve3eedMode = false;
+let originalNumResults = 25;
+let numResultsHasBeenSet = false;
+
+function calculateWavelength(freq, vf) {
+    return (speedOfLight * vf) / (freq * 1e6);
+}
+
+function calculateFrequency(length, vf) {
+    return (speedOfLight * vf) / (length * 1e6);
+}
+
+function findConflicts(length, selectedBands, factors, vf) {
+    const conflicts = new Set();
+    for (const [band, [startFreq, endFreq]] of Object.entries(frequencyRanges)) {
+        if (selectedBands.some(([selectedBand]) => selectedBand === band)) {
+            const minWavelength = calculateWavelength(endFreq, vf);
+            const maxWavelength = calculateWavelength(startFreq, vf);
+            for (const { value, type, penalty } of factors) {
+                const minLength = minWavelength * value;
+                const maxLength = maxWavelength * value;
+                if (length >= minLength && length <= maxLength && maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
+                    const startFreqMHZ = (endFreq * value).toFixed(2);
+                    const endFreqMHZ = (startFreq * value).toFixed(2);
+                    conflicts.add(`${band} × ${type === 'fraction' ? value.toFixed(3) : value.toFixed(0)}λ`);
+                }
+            }
+        }
+    }
+    return Array.from(conflicts);
+}
+
+function calculate() {
+    const vf = parseFloat(document.getElementById('velocityFactor').value);
+    const numResultsInput = document.getElementById('numResults');
+    const numResults = ve3eedMode ? 13 : parseInt(numResultsInput.value);
+    const logarithmic = document.getElementById('logarithmic').checked;
+    const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
+    const minWireLen = parseFloat(document.getElementById('minWireM').value);
+
+    numResultsInput.disabled = ve3eedMode;
+    minWireM.disabled = ve3eedMode;
+    if (ve3eedMode) {
+        numResultsInput.value = 13;
+    } else if (numResultsHasBeenSet) {
+        numResultsInput.value = originalNumResults;
+    }
+
+    if (ve3eedMode) {
+        //const ve3eedLengthsFt = ve3eedNumbers.split(' ').filter(num => num).map(Number);
+        const ve3eedLengthsFt = ve3eedNumbers.split(' ').filter(num => num);
+        
+        const scoredVe3eedLengths = ve3eedLengthsFt.map((ft, index) => {
+            const length = Number(ft) * 0.3048;
+            const conflicts = findConflicts(length, selectedBands, factors, vf);
+            let score = 0;
+            conflicts.forEach(conflict => {
+                const factorMatch = factors.find(f => conflict.includes(`${f.value.toFixed(2)}${f.type === 'fraction' ? 'λ' : 'x'}`));
+                if (factorMatch) {
+                    score -= factorMatch.penalty;
+                }
+            });
+            return { length, conflicts, score, originalIndex: index + 1, ft };
+        });
+
+        scoredVe3eedLengths.sort((a, b) => b.score - a.score);
+
+        const results = scoredVe3eedLengths.map((result, index) => {
+            const length = result.length;
+            return {
+                pos: result.originalIndex, // lengthToPosMap[result.mid],
+                rank: index + 1,
+                length: `${length.toFixed(3)} m`,
+                size: `${result.ft} ft`,
+                conflicts: result.conflicts.join(', '),
+                score: result.score,
+                originalIndex: result.originalIndex
+            };
+        });
+
+        plotResults(selectedBands, results, vf, logarithmic, true);
+
+        const tableBody = document.getElementById('resultsTable').querySelector('tbody');
+        tableBody.innerHTML = '';
+        results.forEach((result) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${result.pos}</td>
+                <td>${result.rank}</td>
+                <td>${result.length}</td>
+                <td>${result.size}</td>
+                <td>${result.conflicts.length ? result.conflicts : 'None'}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    } else {
+        const avoidSet = new Set();
+        for (const [band, [startFreq, endFreq]] of selectedBands) {
+            for (const freq of [startFreq, endFreq]) {
+                const wavelength = calculateWavelength(freq, vf);
+                for (const { value } of factors) {
+                    const length = Math.round(wavelength * value * 1000) / 1000;
+                    if (length <= calculateWavelength(maxFreq, vf)) {
+                        avoidSet.add(length);
+                    }
+                }
+            }
+        }
+
+        const avoidList = Array.from(avoidSet).sort((a, b) => a - b);
+        const midPoints = [];
+        const bandwidths = [];
+
+        for (let i = 0; i < avoidList.length - 1; i++) {
+            const midPoint = (avoidList[i] + avoidList[i + 1]) / 2;
+            const bandwidth = avoidList[i + 1] - avoidList[i];
+            if (midPoint < minWireLen) continue;
+            midPoints.push(midPoint);
+            bandwidths.push(bandwidth);
+        }
+
+        const scoredMidPoints = midPoints.map((mid, index) => {
+            let score = bandwidths[index] / mid;
+            const conflicts = findConflicts(mid, selectedBands, factors, vf);
+            const debugInfo = [];
+            conflicts.forEach(conflict => {
+                const factorMatch = factors.find(f => conflict.includes(`${f.value.toFixed(2)}${f.type === 'fraction' ? 'λ' : 'x'}`));
+                if (factorMatch) {
+                    score -= factorMatch.penalty;
+                    debugInfo.push({ conflict, penalty: factorMatch.penalty });
+                }
+            });
+            console.log(`Midpoint: ${mid.toFixed(3)} m, Score: ${score.toFixed(2)}, Debug Info:`, debugInfo);
+            return { mid, bandwidth: bandwidths[index], score, conflicts, originalIndex: index + 1 };
+        });
+
+        scoredMidPoints.sort((a, b) => b.score - a.score);
+        const topResults = scoredMidPoints.slice(0, numResults);
+
+        // Create a mapping of the sorted lengths to their position (pos)
+        const lengthSortedResults = [...topResults].sort((a, b) => a.mid - b.mid);
+        const lengthToPosMap = lengthSortedResults.reduce((acc, result, idx) => {
+            acc[result.mid] = idx + 1;
+            return acc;
+        }, {});
+
+        const results = topResults.map((result, index) => {
+            const length = result.mid;
+            const conflicts = findConflicts(length, selectedBands, factors, vf);
+            const feet = Math.floor(length * 3.28084);
+            const inches = Math.round((length * 3.28084 - feet) * 12);
+            return {
+                pos: lengthToPosMap[result.mid],
+                rank: index + 1,
+                length: `${length.toFixed(3)} m`,
+                size: `${feet} ft ${inches} in`,
+                conflicts: conflicts.join(', '),
+                score: result.score.toFixed(2),
+                originalIndex: result.originalIndex
+            };
+        });
+
+        plotResults(selectedBands, results, vf, logarithmic, false);
+
+        const tableBody = document.getElementById('resultsTable').querySelector('tbody');
+        tableBody.innerHTML = '';
+        results.forEach((result) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${result.pos}</td>
+                <td>${result.rank}</td>
+                <td>${result.length}</td>
+                <td>${result.size}</td>
+                <td>${result.conflicts.length ? result.conflicts : 'None'}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    console.log('Good lengths with conflicts:', typeof results !== 'undefined' ? results : 'results is not defined');
+
+    sortTable(0);
+}
+
+function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
+    const vfc = 1.0; // constant vf for display; vf already calculated in data
+    const traceData = [];
+    selectedBands.forEach(([band, [startFreq, endFreq]], index) => {
+        const minWavelength = calculateWavelength(endFreq, vf);
+        const maxWavelength = calculateWavelength(startFreq, vf);
+        for (const { value, type, penalty, highlight } of factors) {
+            const xValues = currentUnit === 'meters' ? 
+                            [minWavelength * value, maxWavelength * value] :
+                            [endFreq * value * vf, startFreq * value * vf];
+            if (maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
+                traceData.push({
+                    x: xValues,
+                    y: [index + 1, index + 1],
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { shape: 'linear', width: highlight ? 35 : 35, color: highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB' },
+                    marker: {
+                        color: highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB',
+                        size: 6
+                    },
+                    name: band,
+                    text: [
+                        `× ${type === 'fraction' ? value.toFixed(2) : value.toFixed(0)}λ`,
+                        `× ${type === 'fraction' ? value.toFixed(2) : value.toFixed(0)}λ`,
+                    ]
+                });
+            }
+        }
+    });
+
+    const bestData = results.map((result) => {
+        const xValue = currentUnit === 'meters' ? parseFloat(result.length) : calculateFrequency(parseFloat(result.length), vfc);
+        //const labelText = ve3eedMode ? `#${result.pos}: ${result.length} (${result.size})` : `#${result.pos}: ${result.length} (${result.size}) Rank:${result.rank}`;
+        const labelText = `#${result.pos}: ${result.length} (${result.size})`;
+        return [
+            {
+                x: [xValue],
+                y: [selectedBands.length + 1],
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: ve3eedMode ? '#AD32AD' : '#22AD22', size: 22, symbol: 'circle-open' },
+                name: `RW`,
+                text: [labelText]
+            },
+            {
+                x: [xValue],
+                y: [0],
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: ve3eedMode ? '#AD32AD' : '#22AD22', size: 2, symbol: 'circle-open' },
+                name: `RW`,
+                //text: [labelText],
+                hoverinfo: 'skip'
+            },
+            {
+                x: [xValue, xValue],
+                y: [0, selectedBands.length + 1],
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: ve3eedMode ? '#AD32AD' : '#22AD22', width: 2, dash: 'dash' },
+                showlegend: false,
+                hoverinfo: 'skip'
+            }
+        ];
+    }).flat();
+
+    const layout = {
+        xaxis: {
+            title: currentUnit === 'meters' ? 'Antenna Length (meters)' : 'Frequency (MHz)',
+            type: logarithmic ? 'log' : 'linear',
+            range: logarithmic ? (currentUnit === 'meters' ? [Math.log(1.3), Math.log(9.5)] : [Math.log(1.3), Math.log(9.5)]) : (0, currentUnit === 'meters' ? [0, 180] : [0, calculateFrequency(6, 1.0)]),
+            side: 'bottom',
+        },
+        yaxis: {
+            title: 'Bands',
+            tickvals: Array.from({ length: selectedBands.length }, (_, i) => i + 1).concat([selectedBands.length + 1, 0]),
+            ticktext: selectedBands.map(([band]) => band).concat(['RW', 'RW']),
+            showticklabels: true,
+            range: [0, selectedBands.length + 2]
+        },
+        showlegend: false
+    };
+
+    Plotly.newPlot('plot', [...bestData, ...traceData], layout);
+}
+
+function toggledUnit() {
+    //currentUnit = currentUnit === 'meters' ? 'hertz' : 'meters';
+    currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
+    
+    calculate();
+}
+
+function sortTable(columnIndex) {
+    const table = document.getElementById('resultsTable');
+    const rows = Array.from(table.rows).slice(1);
+    const sortedRows = rows.sort((a, b) => {
+        const cellA = a.cells[columnIndex].innerText;
+        const cellB = b.cells[columnIndex].innerText;
+        if (columnIndex === 0 || columnIndex === 1 || columnIndex === 2) {  // Numeric columns
+            return parseFloat(cellA) - parseFloat(cellB);
+        }
+        return cellA.localeCompare(cellB);
+    });
+    const tableBody = table.querySelector('tbody');
+    tableBody.innerHTML = '';
+    sortedRows.forEach(row => tableBody.appendChild(row));
+}
+
+function toggleVe3eed() {
+    const checkbox = document.getElementById('ve3eedToggle');
+    ve3eedMode = checkbox.checked;
+
+    if (ve3eedMode) {
+        if (!numResultsHasBeenSet) {
+            originalNumResults = document.getElementById('numResults').value;
+            numResultsHasBeenSet = true;
+        }
+        document.getElementById('numResults').value = 13;
+    } else {
+        document.getElementById('numResults').value = originalNumResults;
+    }
+
+    calculate();
+}
+
+document.getElementById('logarithmic').addEventListener('change', calculate);
+document.querySelectorAll('.checkboxes input').forEach(checkbox => checkbox.addEventListener('change', calculate));
+document.getElementById('velocityFactor').addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+        calculate();
+    }
+});
+document.getElementById('numResults').addEventListener('input', (event) => {
+    originalNumResults = document.getElementById('numResults').value;
+    numResultsHasBeenSet = true;
+    calculate();
+});
+document.getElementById('minWireM').addEventListener('input', (event) => {
+    calculate();
+});
+document.addEventListener('DOMContentLoaded', calculate);
+
+document.body.addEventListener('keydown', (event) => {
+    // redundant easter egg, now turned on by default
+    if (event.key === 'V') {
+        easterEgg();
+    }
+});
+
+function easterEgg() {
+        if (document.getElementById('ve3eedContainer').style.display == 'inline') return;
+        document.getElementById('ve3eedContainer').style.display = 'inline';
+        document.getElementById('ve3eedToggle').checked = false;
+        toggleVe3eed();
+}
+
+// default on
+easterEgg();
+
+</script>
+
+</body>
+</html>
