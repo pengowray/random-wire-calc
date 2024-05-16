@@ -99,7 +99,8 @@
 <script>
 const speedOfLight = 299792458;
 const ve3eedNumbers = "29  35.5  41  58  71  84  107  119  148  203  347  407  423"; // feet
-const maxFreq = 1.6; // has vf applied to it
+const maxDisplayFreq = 1.6; // gets vf applied to it
+const maxAllowedWireLength = 200;
 const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
 
 const frequencyRanges = {
@@ -120,7 +121,7 @@ const factors = [
     { value: 1/2, penalty: 10, type: 'fraction', valtext: '0.5' }, // '½'
     //{ value: 1/3, penalty: 3, type: 'fraction', valtext: '⅓' },
     { value: 1/4, penalty: 9, type: 'fraction' }, // '¼' '1/4'
-    { value: 1/8, penalty: 3, type: 'fraction' }, // , valtext: '1/8' 
+    { value: 1/8, penalty: 3, type: 'fraction', valtext: '1/8' }, // , valtext: '⅛' 
     { value: 1/16, penalty: 2, type: 'fraction', valtext: '1/16' }, 
     //{ value: 3/4, penalty: 8, type: 'fraction' },
     //{ value: 1/8, penalty: 3, type: 'fraction' },
@@ -169,6 +170,12 @@ function calculateFrequency(length, vf) {
     return (speedOfLight * vf) / (length * 1e6);
 }
 
+
+function calculateFrequencyFromMHz(freq, vf) {
+    return freq * vf * length * 1e6;
+}
+
+
 function findConflicts(length, selectedBands, factors, vf) {
     const conflicts = new Set();
     for (const [band, [startFreq, endFreq]] of Object.entries(frequencyRanges)) {
@@ -178,7 +185,7 @@ function findConflicts(length, selectedBands, factors, vf) {
             for (const { value, type, penalty, valtext } of factors) {
                 const minLength = minWavelength * value;
                 const maxLength = maxWavelength * value;
-                if (length >= minLength && length <= maxLength && maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
+                if (length >= minLength && length <= maxLength) { //  && maxWavelength * value <= calculateWavelength(maxDisplayFreq, vf)
                     const startFreqMHZ = (endFreq * value).toFixed(2);
                     const endFreqMHZ = (startFreq * value).toFixed(2);
                     conflicts.add( {text: `${band} × ${valtext}λ`, value, type, penalty, valtext } );
@@ -256,9 +263,9 @@ function calculate() {
                 const wavelength = calculateWavelength(freq, vf);
                 for (const { value } of factors) {
                     const length = Math.round(wavelength * value * 1000) / 1000;
-                    if (length <= calculateWavelength(maxFreq, vf)) {
+                    //if (length <= calculateWavelength(maxDisplayFreq, vf)) {
                         avoidSet.add(length);
-                    }
+                    //}
                 }
             }
         }
@@ -271,6 +278,7 @@ function calculate() {
             const midPoint = (avoidList[i] + avoidList[i + 1]) / 2;
             const bandwidth = avoidList[i + 1] - avoidList[i];
             if (midPoint < minWireLen) continue;
+            if (midPoint >= maxAllowedWireLength) continue;
             midPoints.push(midPoint);
             bandwidths.push(bandwidth);
         }
@@ -343,13 +351,17 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
         const maxWavelength = calculateWavelength(startFreq, vf);
         const minWavelengthVFC = calculateWavelength(endFreq, vfc);
         const maxWavelengthVFC = calculateWavelength(startFreq, vfc);
-
+        const minFreq = startFreq * vf;
+        const maxFreq = endFreq * vf;
+        
         for (const { value, type, penalty, highlight, valtext } of factors) {
+            const adjustedFreqMin = calculateFrequency(maxWavelength * value, vfc);
+            const adjustedFreqMax = calculateFrequency(minWavelength * value, vfc);
             const xValues = currentUnit === 'meters' ? 
                             [minWavelength * value, maxWavelength * value] :
-                            [endFreq * value * vf, startFreq * value * vf];
+                            [adjustedFreqMin, adjustedFreqMax];
             const col = highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB';
-            if (maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
+            if ((maxWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) || minWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) { 
                 traceData.push({
                     x: xValues,
                     y: [index + 1, index + 1],
@@ -362,10 +374,11 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                         line: { color : col, width: 1 },
                         //color: col, // (no fill needed for line-ns)
                     },
-                    name: band,
+                    //name: band,
+                    name: `${band} × ${valtext}`,
                     text: [
-                        `× ${valtext}λ<br>${(startFreq * value).toFixed(2)} – ${(endFreq * value).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
-                        `× ${valtext}λ<br>${(startFreq * value).toFixed(2)} – ${(endFreq * value).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
+                        `× ${valtext}λ<br>${(adjustedFreqMin).toFixed(2)} – ${(adjustedFreqMax).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
+                        `× ${valtext}λ<br>${(adjustedFreqMin).toFixed(2)} – ${(adjustedFreqMax).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
                     ]
                 });
             }
@@ -377,7 +390,8 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
         //const labelText = ve3eedMode ? `#${result.pos}: ${result.length} (${result.size})` : `#${result.pos}: ${result.length} (${result.size}) Rank:${result.rank}`;
         var intersects = '';
         if (result.conflicts) intersects = `<br>Intersects: ${result.conflicts}`;
-        const labelText = `#${result.pos}: ${result.length} (${result.size}) ${intersects}`;
+        const nameText = `Wire #${result.pos}`;
+        const labelText = `${result.length} (${result.size}) ${intersects}`;
         //const col = ve3eedMode ? '#AD32AD' : '#22AD22';
         const col = result.conflicts ? '#aaaaaa' : '#22AD22';
         return [
@@ -387,7 +401,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                 type: 'scatter',
                 mode: 'markers',
                 marker: { color: col, size: 10, symbol: 'circle-open' },
-                name: `RW`,
+                name: nameText,
                 text: [labelText]
             },
             {
@@ -396,7 +410,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                 type: 'scatter',
                 mode: 'markers',
                 marker: { color: col, size: 2, symbol: 'circle-open' },
-                name: `RW`,
+                name: nameText,
                 //text: [labelText],
                 hoverinfo: 'skip'
             },
@@ -412,21 +426,36 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
         ];
     }).flat();
 
+    var xrange0 = 2;
+    var xrange1 = 180;
+    var xrange = [xrange0, xrange1];
+    if (currentUnit === 'meters') {
+        xrange = [xrange0, xrange1]
+    } else {
+        xrange = [calculateFrequency(xrange1, vfc), calculateFrequency(xrange0, vfc)];
+        
+    }
+    if (logarithmic) xrange = [Math.log10(xrange[0]), Math.log10(xrange[1])];
+    console.log(xrange);
+    
     const layout = {
         xaxis: {
             title: currentUnit === 'meters' ? 'Antenna Length (meters)' : 'Frequency (MHz)',
             type: logarithmic ? 'log' : 'linear',
-            range: logarithmic ? (currentUnit === 'meters' ? [Math.log(1.3), Math.log(9.5)] : [Math.log(1.3), Math.log(9.5)]) : (0, currentUnit === 'meters' ? [0, 180] : [0, calculateFrequency(6, 1.0)]),
+            //range: logarithmic ? (currentUnit === 'meters' ? [Math.log(1.2), Math.log(9.5)]  : [Math.log(1.2), Math.log(9.5)]) 
+            //: (0, currentUnit === 'meters' ? [0, 180]  : [1, 165]), //  [calculateWavelength(180, vf), calculateWavelength(6.2, vf)]),
+            range: xrange, 
             side: 'bottom',
         },
         yaxis: {
             title: 'Bands',
             tickvals: Array.from({ length: selectedBands.length }, (_, i) => i + 1).concat([selectedBands.length + 1, 0]),
-            ticktext: selectedBands.map(([band]) => band).concat(['RW', 'RW']),
+            ticktext: selectedBands.map(([band]) => band).concat(['Wire', 'Wire']),
             showticklabels: true,
             range: [0, selectedBands.length + 2]
         },
         showlegend: false
+        
     };
 
     Plotly.newPlot('plot', [...bestData, ...traceData], layout);
