@@ -88,13 +88,19 @@
 </table>
 
 <footer>
-    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack <a onclick="easterEgg()">VE3EED</a> (SK). This work is licensed under a Creative Commons Attribution 4.0 International License (or optionally MIT). | Built with Plotly.js</p>
+    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack <a onclick="easterEgg()">VE3EED</a> (SK). This work is licensed under a Creative Commons Attribution 4.0 International License or MIT. | Built with Plotly.js | <a href="https://github.com/pengowray/random-wire-calc">Readme and details on github</a></p>
+    <p>
+    <a href="https://github.com/pengowray/random-wire-calc">
+      <img src="https://img.shields.io/badge/View%20on-GitHub-brightgreen" alt="View on GitHub">
+    </a>
+    </p>
 </footer>
 
 <script>
 const speedOfLight = 299792458;
 const ve3eedNumbers = "29  35.5  41  58  71  84  107  119  148  203  347  407  423"; // feet
 const maxFreq = 1.6; // has vf applied to it
+const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
 
 const frequencyRanges = {
     "160m": [1.8, 2.0],
@@ -111,15 +117,18 @@ const frequencyRanges = {
 };
 
 const factors = [
-    { value: 1/2, penalty: 10, type: 'fraction' },
-    { value: 1/4, penalty: 9, type: 'fraction' },
-    { value: 3/4, penalty: 8, type: 'fraction' },
-    { value: 1, penalty: 7, type: 'fraction', highlight: true },
-    { value: 5/8, penalty: 6, type: 'fraction' },
-    { value: 1/3, penalty: 5, type: 'fraction' },
-    { value: 2/3, penalty: 5, type: 'fraction' },
-    { value: 1/5, penalty: 4, type: 'fraction' },
-    { value: 2/5, penalty: 4, type: 'fraction' },
+    { value: 1/2, penalty: 10, type: 'fraction', valtext: '0.5' }, // '½'
+    //{ value: 1/3, penalty: 3, type: 'fraction', valtext: '⅓' },
+    { value: 1/4, penalty: 9, type: 'fraction' }, // '¼' '1/4'
+    { value: 1/8, penalty: 3, type: 'fraction' }, // , valtext: '1/8' 
+    { value: 1/16, penalty: 2, type: 'fraction', valtext: '1/16' }, 
+    //{ value: 3/4, penalty: 8, type: 'fraction' },
+    //{ value: 1/8, penalty: 3, type: 'fraction' },
+    //{ value: 5/8, penalty: 6, type: 'fraction' },
+    //{ value: 2/3, penalty: 5, type: 'fraction' },
+    //{ value: 1/5, penalty: 4, type: 'fraction' },
+    //{ value: 2/5, penalty: 4, type: 'fraction' },
+    { value: 1, penalty: 7, type: 'whole', highlight: true },
     { value: 2, penalty: 6, type: 'multiple' },
     { value: 3, penalty: 5, type: 'multiple' },
     { value: 4, penalty: 4, type: 'multiple' },
@@ -140,7 +149,12 @@ const factors = [
     { value: 19, penalty: 0.6, type: 'multiple' },
     { value: 20, penalty: 0.6, type: 'multiple' }
 ];
-
+//set valtext for all
+for (let factor of factors) {
+    if (!factor.valtext) {
+        factor.valtext = `${factor.type === 'fraction' ? factor.value.toFixed(2) : factor.value.toFixed(0)}`;
+    }
+}
 //let currentUnit = 'meters';
 let currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
 let ve3eedMode = false;
@@ -161,13 +175,13 @@ function findConflicts(length, selectedBands, factors, vf) {
         if (selectedBands.some(([selectedBand]) => selectedBand === band)) {
             const minWavelength = calculateWavelength(endFreq, vf);
             const maxWavelength = calculateWavelength(startFreq, vf);
-            for (const { value, type, penalty } of factors) {
+            for (const { value, type, penalty, valtext } of factors) {
                 const minLength = minWavelength * value;
                 const maxLength = maxWavelength * value;
                 if (length >= minLength && length <= maxLength && maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
                     const startFreqMHZ = (endFreq * value).toFixed(2);
                     const endFreqMHZ = (startFreq * value).toFixed(2);
-                    conflicts.add(`${band} × ${type === 'fraction' ? value.toFixed(3) : value.toFixed(0)}λ`);
+                    conflicts.add( {text: `${band} × ${valtext}λ`, value, type, penalty, valtext } );
                 }
             }
         }
@@ -200,10 +214,7 @@ function calculate() {
             const conflicts = findConflicts(length, selectedBands, factors, vf);
             let score = 0;
             conflicts.forEach(conflict => {
-                const factorMatch = factors.find(f => conflict.includes(`${f.value.toFixed(2)}${f.type === 'fraction' ? 'λ' : 'x'}`));
-                if (factorMatch) {
-                    score -= factorMatch.penalty;
-                }
+                score -= conflict.penalty;
             });
             return { length, conflicts, score, originalIndex: index + 1, ft };
         });
@@ -217,7 +228,7 @@ function calculate() {
                 rank: index + 1,
                 length: `${length.toFixed(3)} m`,
                 size: `${result.ft} ft`,
-                conflicts: result.conflicts.join(', '),
+                conflicts: result.conflicts.map(o => o.text).join(', '),
                 score: result.score,
                 originalIndex: result.originalIndex
             };
@@ -234,7 +245,7 @@ function calculate() {
                 <td>${result.rank}</td>
                 <td>${result.length}</td>
                 <td>${result.size}</td>
-                <td>${result.conflicts.length ? result.conflicts : 'None'}</td>
+                <td>${result.conflicts.length ? result.conflicts : '—'}</td>
             `;
             tableBody.appendChild(row);
         });
@@ -268,12 +279,10 @@ function calculate() {
             let score = bandwidths[index] / mid;
             const conflicts = findConflicts(mid, selectedBands, factors, vf);
             const debugInfo = [];
+            debugInfo.push({ score });
             conflicts.forEach(conflict => {
-                const factorMatch = factors.find(f => conflict.includes(`${f.value.toFixed(2)}${f.type === 'fraction' ? 'λ' : 'x'}`));
-                if (factorMatch) {
-                    score -= factorMatch.penalty;
-                    debugInfo.push({ conflict, penalty: factorMatch.penalty });
-                }
+                score -= conflict.penalty;
+                debugInfo.push({ conflict });
             });
             console.log(`Midpoint: ${mid.toFixed(3)} m, Score: ${score.toFixed(2)}, Debug Info:`, debugInfo);
             return { mid, bandwidth: bandwidths[index], score, conflicts, originalIndex: index + 1 };
@@ -299,7 +308,7 @@ function calculate() {
                 rank: index + 1,
                 length: `${length.toFixed(3)} m`,
                 size: `${feet} ft ${inches} in`,
-                conflicts: conflicts.join(', '),
+                conflicts: conflicts.map(o => o.text).join(', '),
                 score: result.score.toFixed(2),
                 originalIndex: result.originalIndex
             };
@@ -316,7 +325,7 @@ function calculate() {
                 <td>${result.rank}</td>
                 <td>${result.length}</td>
                 <td>${result.size}</td>
-                <td>${result.conflicts.length ? result.conflicts : 'None'}</td>
+                <td>${result.conflicts.length ? result.conflicts : '—'}</td>
             `;
             tableBody.appendChild(row);
         });
@@ -328,30 +337,35 @@ function calculate() {
 }
 
 function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
-    const vfc = 1.0; // constant vf for display; vf already calculated in data
     const traceData = [];
     selectedBands.forEach(([band, [startFreq, endFreq]], index) => {
         const minWavelength = calculateWavelength(endFreq, vf);
         const maxWavelength = calculateWavelength(startFreq, vf);
-        for (const { value, type, penalty, highlight } of factors) {
+        const minWavelengthVFC = calculateWavelength(endFreq, vfc);
+        const maxWavelengthVFC = calculateWavelength(startFreq, vfc);
+
+        for (const { value, type, penalty, highlight, valtext } of factors) {
             const xValues = currentUnit === 'meters' ? 
                             [minWavelength * value, maxWavelength * value] :
                             [endFreq * value * vf, startFreq * value * vf];
+            const col = highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB';
             if (maxWavelength * value <= calculateWavelength(maxFreq, vf)) {
                 traceData.push({
                     x: xValues,
                     y: [index + 1, index + 1],
                     type: 'scatter',
-                    mode: 'lines',
-                    line: { shape: 'linear', width: highlight ? 35 : 35, color: highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB' },
-                    marker: {
-                        color: highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB',
-                        size: 6
+                    mode: 'lines+markers',
+                    line: { shape: 'linear', width: 35, color: col },
+                    marker: { // marker is a vertical line, just to make boxes visible when too thin to be rendered
+                        size: 20,
+                        symbol: 'line-ns', // vert line
+                        line: { color : col, width: 1 },
+                        //color: col, // (no fill needed for line-ns)
                     },
                     name: band,
                     text: [
-                        `× ${type === 'fraction' ? value.toFixed(2) : value.toFixed(0)}λ`,
-                        `× ${type === 'fraction' ? value.toFixed(2) : value.toFixed(0)}λ`,
+                        `× ${valtext}λ<br>${(startFreq * value).toFixed(2)} – ${(endFreq * value).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
+                        `× ${valtext}λ<br>${(startFreq * value).toFixed(2)} – ${(endFreq * value).toFixed(2)} MHz × ${vf.toFixed(2)}<br>${(minWavelength * value).toFixed(2)} – ${(maxWavelength * value).toFixed(2)} meters`,
                     ]
                 });
             }
@@ -361,14 +375,18 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
     const bestData = results.map((result) => {
         const xValue = currentUnit === 'meters' ? parseFloat(result.length) : calculateFrequency(parseFloat(result.length), vfc);
         //const labelText = ve3eedMode ? `#${result.pos}: ${result.length} (${result.size})` : `#${result.pos}: ${result.length} (${result.size}) Rank:${result.rank}`;
-        const labelText = `#${result.pos}: ${result.length} (${result.size})`;
+        var intersects = '';
+        if (result.conflicts) intersects = `<br>Intersects: ${result.conflicts}`;
+        const labelText = `#${result.pos}: ${result.length} (${result.size}) ${intersects}`;
+        //const col = ve3eedMode ? '#AD32AD' : '#22AD22';
+        const col = result.conflicts ? '#aaaaaa' : '#22AD22';
         return [
             {
                 x: [xValue],
                 y: [selectedBands.length + 1],
                 type: 'scatter',
                 mode: 'markers',
-                marker: { color: ve3eedMode ? '#AD32AD' : '#22AD22', size: 22, symbol: 'circle-open' },
+                marker: { color: col, size: 10, symbol: 'circle-open' },
                 name: `RW`,
                 text: [labelText]
             },
@@ -377,7 +395,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                 y: [0],
                 type: 'scatter',
                 mode: 'markers',
-                marker: { color: ve3eedMode ? '#AD32AD' : '#22AD22', size: 2, symbol: 'circle-open' },
+                marker: { color: col, size: 2, symbol: 'circle-open' },
                 name: `RW`,
                 //text: [labelText],
                 hoverinfo: 'skip'
@@ -387,7 +405,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                 y: [0, selectedBands.length + 1],
                 type: 'scatter',
                 mode: 'lines',
-                line: { color: ve3eedMode ? '#AD32AD' : '#22AD22', width: 2, dash: 'dash' },
+                line: { color: col, width: 2, dash: 'dash' },
                 showlegend: false,
                 hoverinfo: 'skip'
             }

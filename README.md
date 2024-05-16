@@ -1,6 +1,6 @@
 # Random Wire Calculator [VK3PGO]
 
-This is the repo for [VK3PGO's Random Wire Calculator](https://pengowray.github.io/random-wire-calc/). The calculator will suggest to you, the amateur radio enthusiast, good lengths of wire to cut your random wire antenna. The methodology used by this calculator to choose wire lengths is needlessly complex, unscientific, unreviewed and untested. I make no claims to the validity of the results. Still, you can enjoy the visual plot, and decide for yourself. You can see feedback for how well various suggested wire lengths worked in the Discussion section (Or at least you'll see your own feedback there after you leave it).
+This is the repo for [VK3PGO's Random Wire Calculator](https://pengowray.github.io/random-wire-calc/). The calculator will suggest to you, the amateur radio enthusiast, good lengths of wire to cut your random wire antenna. The methodology used by this calculator to choose wire lengths is needlessly complex, unscientific, undocumented, unverified and untested. I make no claims to the validity of the results. Enjoy the visual plot, and decide for yourself. You can see feedback for how well various suggested wire lengths worked in the Discussion section (Or at least you'll see your own feedback there after you leave it).
 
 Read [Jack VE3EED's 2013 post about The Best Random Wire Antenna Lengths](https://www.hamuniverse.com/randomwireantennalengths.html). Jack's recommended wire lengths can be viewed in this Random Wire Calculator too by pressing the checkbox.
 
