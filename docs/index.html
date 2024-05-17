@@ -185,7 +185,7 @@ function findConflicts(length, selectedBands, factors, vf) {
                 if (length >= minLength && length <= maxLength) { //  && maxWavelength * value <= calculateWavelength(maxDisplayFreq, vf)
                     const startFreqMHZ = (endFreq * value).toFixed(2);
                     const endFreqMHZ = (startFreq * value).toFixed(2);
-                    conflicts.add( {text: `${band} × ${valtext}`, value, type, penalty, valtext } );
+                    conflicts.add( {text: `${band} ${valtext}λ`, value, type, penalty, valtext } );
                 }
             }
         }
@@ -348,18 +348,18 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
         const minWavelength = calculateWavelength(endFreq, vf);
         const maxWavelength = calculateWavelength(startFreq, vf);
         // wavelength in space
-        const minWavelengthVFC = calculateWavelength(endFreq, vfc);
-        const maxWavelengthVFC = calculateWavelength(startFreq, vfc);
+        const minWavelengthInSpace = calculateWavelength(endFreq, vfc);
+        const maxWavelengthInSpace = calculateWavelength(startFreq, vfc);
         
         for (const { value, type, penalty, highlight, valtext } of factors) {
             const adjustedFreqMin = startFreq / value;
             const adjustedFreqMax = endFreq / value;
             const xValues = currentUnit === 'meters' ? 
-                            [minWavelength * value, maxWavelength * value] :
+                            [minWavelengthInSpace * value, maxWavelengthInSpace * value] :
                             [adjustedFreqMin, adjustedFreqMax];
             const col = highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB';
-            const lambda = (value == 1) ? '' : ` × ${valtext}λ`
-            const hovertext = `<b>${band} band${lambda}</b><br>${(adjustedFreqMin).toFixed(2)} to ${(adjustedFreqMax).toFixed(2)} MHz <br><i>λ=${(minWavelengthVFC * value).toFixed(3)} to ${(maxWavelengthVFC * value).toFixed(3)} m</i> <br><br><b>Electrical length</b> (vf ${vf.toFixed(2)}):<br>${(minWavelength * value).toFixed(3)} – ${(maxWavelength * value).toFixed(3)} m`;
+            const lambda = (value == 1) ? '' : ` ${valtext}λ`
+            const hovertext = `<b>${band} band${lambda}</b><br>${(adjustedFreqMin).toFixed(2)} to ${(adjustedFreqMax).toFixed(2)} MHz <br><i>λ=${(minWavelengthInSpace * value).toFixed(3)} to ${(maxWavelengthInSpace * value).toFixed(3)} m</i> <br><b>Wire lengths</b> (vf ${vf.toFixed(2)}):<br>${(minWavelength * value).toFixed(3)} – ${(maxWavelength * value).toFixed(3)} m`;
 
             if ((maxWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) || minWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) { 
                 traceData.push({
@@ -375,7 +375,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                         //color: col, // (no fill needed for line-ns)
                     },
                     //name: band,
-                    name: `${band} × ${valtext}`,
+                    name: `${band} ${valtext}`,
                     hovertemplate: [hovertext, hovertext]
                 });
             }
@@ -485,6 +485,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
     };
 
     Plotly.newPlot('plot', [...bestData, ...traceData, dummyTrace], layout);
+    //Plotly.newPlot('plot', [...bestData, ...traceData], layout);
 }
 
 function toggledUnit() {
