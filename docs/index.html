@@ -70,7 +70,8 @@
     <input type="number" id="minWireM" value="7" min="0">
     <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
     <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
-    <label><input type="checkbox" id="ve3eedToggle" onchange="presetUpdated()"> 
+    <br>
+    <label for="preset">Preset: 
         <select name="preset" id="preset" onchange="presetUpdated()">
             <option value="calc">No preset (calculate)</option>
             <option value="VE3EED">Jack VE3EED recommendations</option>
@@ -138,7 +139,9 @@ const presets = {
     "qrpguys4010": {
         name: "QRPGuys 40m-10m UnUnTenna 9:1",
         feet: "41 35.5 29",
+        // counterpoise: 
     },
+    // aliexpress special includes 16.5m antenna, 10m ground
 };
 
 for (const p in presets) {
@@ -209,7 +212,6 @@ for (let factor of factors) {
 //let currentUnit = 'meters';
 let currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
 let presetMode = false;
-let originalNumResults = 25;
 
 function calculateWavelength(freq, vf) {
     return (speedOfLight * vf) / (freq * 1e6);
@@ -243,13 +245,13 @@ function calculate() {
     const vf = parseFloat(document.getElementById('velocityFactor').value);
     const numResultsInput = document.getElementById('numResults');
     const numResultsInputPreset = document.getElementById('numResultsPreset');
-    const numResults = presetMode ? preset.count : parseInt(numResultsInput.value);
     const logarithmic = document.getElementById('logarithmic').checked;
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
     const minWireLen = parseFloat(document.getElementById('minWireM').value);
 
     const presetChoice = document.getElementById('preset').value;
     const wasPreset = numResultsInputPreset.classList.contains('hidden');
+    let numResults = 10;
 
     presetMode = presetChoice === 'calc' ? false : true;
     minWireM.disabled = presetMode;
@@ -260,19 +262,22 @@ function calculate() {
         numResultsInputPreset.disabled = true;
         numResultsInput.classList.add('hidden');
         numResultsInputPreset.classList.remove('hidden');
+        numResults = preset.count;
 
     } else {
         numResultsInputPreset.classList.add('hidden');
         numResultsInput.classList.remove('hidden');
+        numResults = parseInt(numResultsInput.value);
     }
-    
+
     if (presetMode) {
+        
         //const ve3eedLengthsFt = presets.split(' ').filter(num => num).map(Number);
         //var presetChoice = document.getElementById('preset').value;
         //var preset = presets[presetChoice].feet;
-        const ve3eedLengthsFt = preset.feet.split(' ').filter(num => num);
+        const presetLensFt = preset.feet.split(' ').filter(num => num);
         
-        const scoredVe3eedLengths = ve3eedLengthsFt.map((ft, index) => {
+        const scoredPresetLens = presetLensFt.map((ft, index) => {
             const length = Number(ft) * 0.3048;
             const conflicts = findConflicts(length, selectedBands, factors, vf);
             let score = 0;
@@ -282,9 +287,9 @@ function calculate() {
             return { length, conflicts, score, originalIndex: index + 1, ft };
         });
 
-        scoredVe3eedLengths.sort((a, b) => b.score - a.score);
+        scoredPresetLens.sort((a, b) => b.score - a.score);
 
-        const results = scoredVe3eedLengths.map((result, index) => {
+        const results = scoredPresetLens.map((result, index) => {
             const length = result.length;
             return {
                 pos: result.originalIndex, // lengthToPosMap[result.mid],
@@ -582,8 +587,6 @@ document.getElementById('velocityFactor').addEventListener('keypress', (event) =
     }
 });
 document.getElementById('numResults').addEventListener('input', (event) => {
-    originalNumResults = document.getElementById('numResults').value;
-    //numResultsHasBeenSet = true;
     calculate();
 });
 document.getElementById('minWireM').addEventListener('input', (event) => {
