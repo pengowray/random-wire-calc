@@ -66,7 +66,17 @@
     <input type="number" id="minWireM" value="7" min="0">
     <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
     <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
-    <label id="ve3eedContainer"><input type="checkbox" id="ve3eedToggle" onchange="toggleVe3eed()"> see VE3EED recommendations</label>
+    <label><input type="checkbox" id="ve3eedToggle" onchange="toggleVe3eed()"> 
+        <select name="preset" id="preset" onchange="toggleVe3eed()">
+            <option value="calc">No preset (calculate)</option>
+            <option value="VE3EED">Jack VE3EED recommendations</option>
+            <option value="balundesigns1">Balun Designs recommendations: 160m through 10m</option>
+            <option value="balundesigns2">Balun Designs recommendations: limited to 40m through 6m</option>
+            <option value="balundesigns3">Balun Designs alternative lengths: 160m through 10m (if all others fail)</option>
+        </select>
+    </label>
+    
+    
 </div>
 
 <div id="plot" class="plot"></div>
@@ -96,10 +106,40 @@
 <script>
 const speedOfLight = 299792458;
 
-const ve3eedNumbers = "29  35.5  41  58  71  84  107  119  148  203  347  407  423"; // feet
-const balunDesignPresets = "53 59 72 88.5 98.5 124.5 135 146 162 175 "; // feet https://youtu.be/xfqlun3bdI0?t=86 [2017]
-const balunDesignPresets2 = "58 71 84 107 119 148 203"; // feet
-var presets = ve3eedNumbers;
+// https://www.balundesigns.com/content/Wire%20Lengths%20for%204%20and%209-1%20ununs.pdf [date?] found via https://youtu.be/xfqlun3bdI0?t=86 [2017] "53 59 72 88.5 98.5 124.5 135 146 162 175"
+
+const presets = {
+    "VE3EED": {
+        name : "Jack VE3EED recommendations",
+        feet:  "29  35.5  41  58  71  84  107  119  148  203  347  407  423",
+        count: 13
+    },
+    "balundesigns1": {
+        name: "Balun Designs recommendations: 160m through 10m",
+        feet: "53 59 72 88.5 98.5 124.5 146 162 175",
+        count: 9
+    },
+    "balundesigns2": {
+        name: "Balun Designs recommendations: limited to 40m through 6m",
+        feet: "36 44 49",
+        count: 3
+    },
+    "balundesigns3": {
+        // 160m through 10m (alternative lengths if all others fail)
+        name: "Balun Designs alternative lengths: 160m through 10m (if all others fail)",
+        feet:  "58 71 84 107 119 148 203",
+        count: 7
+    }
+};
+/*
+for (let p of presets.values()) {
+    if (!p.presetCount) {
+        p.presetCount = preset.split(' ').filter(num => num).length;
+    }
+}
+*/
+
+var preset = presets['VE3EED'];
 
 const maxDisplayFreq = 1.6; // gets vf applied to it
 const maxAllowedWireLength = 200;
@@ -196,22 +236,16 @@ function findConflicts(length, selectedBands, factors, vf) {
 function calculate() {
     const vf = parseFloat(document.getElementById('velocityFactor').value);
     const numResultsInput = document.getElementById('numResults');
-    const numResults = ve3eedMode ? 13 : parseInt(numResultsInput.value);
+    const numResults = ve3eedMode ? preset.count : parseInt(numResultsInput.value);
     const logarithmic = document.getElementById('logarithmic').checked;
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
     const minWireLen = parseFloat(document.getElementById('minWireM').value);
 
-    numResultsInput.disabled = ve3eedMode;
-    minWireM.disabled = ve3eedMode;
-    if (ve3eedMode) {
-        numResultsInput.value = 13;
-    } else if (numResultsHasBeenSet) {
-        numResultsInput.value = originalNumResults;
-    }
-
     if (ve3eedMode) {
         //const ve3eedLengthsFt = presets.split(' ').filter(num => num).map(Number);
-        const ve3eedLengthsFt = presets.split(' ').filter(num => num);
+        //var presetChoice = document.getElementById('preset').value;
+        //var preset = presets[presetChoice].feet;
+        const ve3eedLengthsFt = preset.feet.split(' ').filter(num => num);
         
         const scoredVe3eedLengths = ve3eedLengthsFt.map((ft, index) => {
             const length = Number(ft) * 0.3048;
@@ -512,17 +546,27 @@ function sortTable(columnIndex) {
 }
 
 function toggleVe3eed() {
-    const checkbox = document.getElementById('ve3eedToggle');
-    ve3eedMode = checkbox.checked;
+    const presetChoice = document.getElementById('preset').value;
+    const numResultsInput = document.getElementById('numResults');
+    
+    const wasDisabled = numResultsInput.disabled;    
+    ve3eedMode = presetChoice === 'calc' ? false : true;
+
+    numResultsInput.disabled = ve3eedMode;
+    minWireM.disabled = ve3eedMode;
 
     if (ve3eedMode) {
-        if (!numResultsHasBeenSet) {
-            originalNumResults = document.getElementById('numResults').value;
+        if (!wasDisabled) {
+            originalNumResults = numResultsInput.value;
             numResultsHasBeenSet = true;
         }
-        document.getElementById('numResults').value = 13;
+        preset = presets[presetChoice];
+        numResultsInput.value = preset.count;
+
     } else {
-        document.getElementById('numResults').value = originalNumResults;
+        if (wasDisabled && numResultsHasBeenSet) {
+            document.getElementById('numResults').value = originalNumResults;
+        }
     }
 
     calculate();
