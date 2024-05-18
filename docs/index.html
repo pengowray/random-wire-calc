@@ -38,6 +38,9 @@
             text-align: center;
             font-size: 0.9em;
         }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -62,17 +65,19 @@
     <input type="text" id="velocityFactor" value="0.95">
     <label for="numResults">Number of Results: </label>
     <input type="number" id="numResults" value="25" min="1">
+    <input type="number" id="numResultsPreset" value="13" min="1">
     <label for="minWireM">Min wire length (m): </label>
     <input type="number" id="minWireM" value="7" min="0">
     <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
     <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
-    <label><input type="checkbox" id="ve3eedToggle" onchange="toggleVe3eed()"> 
-        <select name="preset" id="preset" onchange="toggleVe3eed()">
+    <label><input type="checkbox" id="ve3eedToggle" onchange="presetUpdated()"> 
+        <select name="preset" id="preset" onchange="presetUpdated()">
             <option value="calc">No preset (calculate)</option>
             <option value="VE3EED">Jack VE3EED recommendations</option>
             <option value="balundesigns1">Balun Designs recommendations: 160m through 10m</option>
             <option value="balundesigns2">Balun Designs recommendations: limited to 40m through 6m</option>
             <option value="balundesigns3">Balun Designs alternative lengths: 160m through 10m (if all others fail)</option>
+            <option value="qrpguys4010">QRPGuys 40m-10m UnUnTenna (9:1)</option>
         </select>
     </label>
     
@@ -129,15 +134,17 @@ const presets = {
         name: "Balun Designs alternative lengths: 160m through 10m (if all others fail)",
         feet:  "58 71 84 107 119 148 203",
         count: 7
-    }
+    },
+    "qrpguys4010": {
+        name: "QRPGuys 40m-10m UnUnTenna 9:1",
+        feet: "41 35.5 29",
+    },
 };
-/*
-for (let p of presets.values()) {
-    if (!p.presetCount) {
-        p.presetCount = preset.split(' ').filter(num => num).length;
-    }
+
+for (const p in presets) {
+    presets[p].count = presets[p].feet.split(' ').filter(num => num).length;
 }
-*/
+
 
 var preset = presets['VE3EED'];
 
@@ -201,9 +208,8 @@ for (let factor of factors) {
 
 //let currentUnit = 'meters';
 let currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
-let ve3eedMode = false;
+let presetMode = false;
 let originalNumResults = 25;
-let numResultsHasBeenSet = false;
 
 function calculateWavelength(freq, vf) {
     return (speedOfLight * vf) / (freq * 1e6);
@@ -236,12 +242,31 @@ function findConflicts(length, selectedBands, factors, vf) {
 function calculate() {
     const vf = parseFloat(document.getElementById('velocityFactor').value);
     const numResultsInput = document.getElementById('numResults');
-    const numResults = ve3eedMode ? preset.count : parseInt(numResultsInput.value);
+    const numResultsInputPreset = document.getElementById('numResultsPreset');
+    const numResults = presetMode ? preset.count : parseInt(numResultsInput.value);
     const logarithmic = document.getElementById('logarithmic').checked;
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
     const minWireLen = parseFloat(document.getElementById('minWireM').value);
 
-    if (ve3eedMode) {
+    const presetChoice = document.getElementById('preset').value;
+    const wasPreset = numResultsInputPreset.classList.contains('hidden');
+
+    presetMode = presetChoice === 'calc' ? false : true;
+    minWireM.disabled = presetMode;
+
+    if (presetMode) {
+        preset = presets[presetChoice];
+        numResultsInputPreset.value = preset.count;
+        numResultsInputPreset.disabled = true;
+        numResultsInput.classList.add('hidden');
+        numResultsInputPreset.classList.remove('hidden');
+
+    } else {
+        numResultsInputPreset.classList.add('hidden');
+        numResultsInput.classList.remove('hidden');
+    }
+    
+    if (presetMode) {
         //const ve3eedLengthsFt = presets.split(' ').filter(num => num).map(Number);
         //var presetChoice = document.getElementById('preset').value;
         //var preset = presets[presetChoice].feet;
@@ -545,30 +570,7 @@ function sortTable(columnIndex) {
     sortedRows.forEach(row => tableBody.appendChild(row));
 }
 
-function toggleVe3eed() {
-    const presetChoice = document.getElementById('preset').value;
-    const numResultsInput = document.getElementById('numResults');
-    
-    const wasDisabled = numResultsInput.disabled;    
-    ve3eedMode = presetChoice === 'calc' ? false : true;
-
-    numResultsInput.disabled = ve3eedMode;
-    minWireM.disabled = ve3eedMode;
-
-    if (ve3eedMode) {
-        if (!wasDisabled) {
-            originalNumResults = numResultsInput.value;
-            numResultsHasBeenSet = true;
-        }
-        preset = presets[presetChoice];
-        numResultsInput.value = preset.count;
-
-    } else {
-        if (wasDisabled && numResultsHasBeenSet) {
-            document.getElementById('numResults').value = originalNumResults;
-        }
-    }
-
+function presetUpdated() {
     calculate();
 }
 
@@ -581,7 +583,7 @@ document.getElementById('velocityFactor').addEventListener('keypress', (event) =
 });
 document.getElementById('numResults').addEventListener('input', (event) => {
     originalNumResults = document.getElementById('numResults').value;
-    numResultsHasBeenSet = true;
+    //numResultsHasBeenSet = true;
     calculate();
 });
 document.getElementById('minWireM').addEventListener('input', (event) => {
