@@ -307,7 +307,7 @@ function calculate() {
             const length = result.mid;
             const conflicts = findConflicts(length, selectedBands, factors, vf);
             const feet = Math.floor(length * 3.28084);
-            const inches = Math.round((length * 3.28084 - feet) * 12);
+            const inches = Math.floor((length * 3.28084 - feet) * 12);
             return {
                 pos: lengthToPosMap[result.mid],
                 rank: index + 1,
