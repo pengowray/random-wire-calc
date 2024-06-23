@@ -41,6 +41,11 @@
         .hidden {
             display: none;
         }
+        .caution {
+            background-color: #f2dede;
+            color: #a94442;
+            padding: 10px;
+            margin-bottom: 20px;}
     </style>
 </head>
 <body>
@@ -79,29 +84,52 @@
             <option value="balundesigns2">Balun Designs recommendations: limited to 40m through 6m</option>
             <option value="balundesigns3">Balun Designs alternative lengths: 160m through 10m (if all others fail)</option>
             <option value="qrpguys4010">QRPGuys 40m-10m UnUnTenna (9:1)</option>
+            <option value="sparc">VK3TR / SPARC VK3BSP blog (#0 and #1)</option>
+            <option value="sprott_feet">J. C. Sprott recommended lengths (feet)</option>
         </select>
     </label>
-    
+</div>
+<div class="caution">
+    <p>
+        ⚠ Caution: <b>This tool is experimental.</b> The results are not verified and should be interpreted with care. This is a work in progress. There are bugs and issues. Results may change when this project is updated. 
+        <a href="https://github.com/pengowray/random-wire-calc">See GitHub for the readme, issues, and to share your thoughts (<i>Discussion</i> tab).</a>
+    </p>
+
     
 </div>
 
 <div id="plot" class="plot"></div>
-
+<h2>Random wire candiates</h2>
 <table id="resultsTable">
     <thead>
         <tr>
-            <th onclick="sortTable(0)">Pos</th>
+            <th onclick="sortTable(0)">#</th>
             <th onclick="sortTable(1)">Rank</th>
             <th onclick="sortTable(0)">Length (m)</th>
             <th onclick="sortTable(0)">Length (ft in)</th>
-            <th onclick="sortTable(4)">Conflicts</th>
+            <th onclick="sortTable(4)" style="text-align: left;">Notes</th>
         </tr>
     </thead>
     <tbody></tbody>
 </table>
 
+<br>
+<div class="about">
+    Notes about random wire (long wire) antennas:
+    <ul>
+        <li>Usually longer than 1/4λ at the lowest operating frequency</li>
+        <li>Suited for low-power operating</li>
+        <li>Aim to be non-resonant on any particular frequency</li>
+        <li>Requires a 9:1 unun</li>
+        <li>A counterpoise (or multiple counterpoises) is recommended</li>
+        <li>Typically requires an antenna tuner to achieve a match</li>
+        <li>Efficiency decreases the wire is made very long or installed closer to earth</li>
+        <li>Check with other sources for authoritative information</li>
+    </ul>
+</div> 
+
 <footer>
-    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack <a onclick="easterEgg()">VE3EED</a> (SK). This work is licensed under a Creative Commons Attribution 4.0 International License or MIT. | Built with Plotly.js | <a href="https://github.com/pengowray/random-wire-calc">Readme and details on github</a></p>
+    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack Clarke, VE3EED (SK). This work is licensed under a Creative Commons Attribution 4.0 International License or MIT. | Built with Plotly.js | <a href="https://github.com/pengowray/random-wire-calc">Readme and details on github</a></p>
     <p>
     <a href="https://github.com/pengowray/random-wire-calc">
       <img src="https://img.shields.io/badge/View%20on-GitHub-brightgreen" alt="View on GitHub">
@@ -116,6 +144,7 @@ const speedOfLight = 299792458;
 
 const presets = {
     "VE3EED": {
+        // reprinted in: SARC Communicator 2018-11 https://archive.org/details/SARC_Communicator_2018-11/
         name : "Jack VE3EED recommendations",
         feet:  "29  35.5  41  58  71  84  107  119  148  203  347  407  423",
         count: 13
@@ -141,7 +170,38 @@ const presets = {
         feet: "41 35.5 29",
         // counterpoise: 
     },
-    // aliexpress special includes 16.5m antenna, 10m ground
+    "sparc": {
+        //https://sparc.asn.au/2022/04/22/random-wire-eflw-antenna-designs/
+        //Author: Steven VK3TR
+        //TODO: add #2 ranks too; separate out 0/1/2 with different colours; double check numbers
+        name: "SPARC VK3BSP blog (#0 and #1)",
+        feet: "41 43 62 64 112 125 126 166 167 202 223 225 226 251 310 318 320 261 400 402 423",
+    },
+    "sprott_feet": {
+        // https://sprott.physics.wisc.edu/technote/randwire.htm - todo: use mhz
+        name: "J. C. Sprott recommended lengths (feet)",
+        feet: "281 229 213 198 196 194 180 176 165 159 148 143 112 107 99 98 95 90 82 80 74 63 57 53 49 48 42 37 30 25 21 19",
+
+        //TODO: new format
+        wires: {
+            "all": {
+                lens: "281 229 213 198 196 194 180 176 165 159 148 143 112 107 99 98 95 90 82 80 74 63 57 53 49 48 42 37 30 25 21 19",
+                units: 'feet',
+                description: "gaps in the quarter-wavelength frequency spectrum over the range 0-30 MHz in 10 Hz steps where such resonances would be absent and the corresponding required electrical lengths of the antenna.",
+            },
+            "shortest": {
+                lens: "143",
+                units: 'feet',
+                description: "The shortest antenna that has a chance of tuning all bands has an electrical length of 143 [feet]",
+                color: "green",
+                override: true,
+            }
+        }
+    }
+    // - aliexpress special includes 16.5m antenna, 10m ground
+    // - blog: "I measured out 21.6 m of wire (which for ✨magic✨ reasons seem to be a good universal antenna length)…" // https://blinry.org/50-things-with-sdr/
+    // - " A standard recommendation for the 40m band (see QST, March 1936, p. 32, "An Unorthodox Antenna") is an 84' long end fed and a 17' long counterpoise (6.5' for 20m)." -- https://udel.edu/~mm/ham/randomWire/
+    // - "A counterpoise is simply a long, insulated wire that attaches to the ground connection on your antenna tuner. The best counterpoise is 1/4-wavelength at the lowest frequency you intend to use. That’s a lot of wire at, say, 3.5 MHz, but you can loop the wire around the room and hide it from view. " -- https://www.arrl.org/random-wires
 };
 
 for (const p in presets) {
@@ -170,18 +230,20 @@ const frequencyRanges = {
 };
 
 const factors = [
-    { value: 1/2, penalty: 10, type: 'fraction', valtext: '0.5' }, // '½'
-    //{ value: 1/3, penalty: 3, type: 'fraction', valtext: '⅓' },
-    { value: 1/4, penalty: 9, type: 'fraction' }, // '¼' '1/4'
-    { value: 1/8, penalty: 3, type: 'fraction', valtext: '1/8' }, // , valtext: '⅛' 
-    { value: 1/16, penalty: 2, type: 'fraction', valtext: '1/16' }, 
-    //{ value: 3/4, penalty: 8, type: 'fraction' },
-    //{ value: 1/8, penalty: 3, type: 'fraction' },
+    { value: 1/2, penalty: 10, type: 'fraction', valtext: '0.5λ', plain: "1/2", }, // '½'
+    //{ value: 1/3, penalty: 3, type: 'fraction', valtext: 'λ/3', plain: "1/3", },
+    { value: 1/4, penalty: 9, type: 'fraction', valtext: "0.25λ", plain: "1/4" }, // '¼' '1/4' // valtext defaults to "0.25λ" anyway
+    //{ value: 1/5, penalty: 4, type: 'fraction', valtext: 'λ/5', plain: "1/5" },
+    //{ value: 1/6, penalty: 3, type: 'fraction', valtext: 'λ/6', plain: "1/6" },
+    //{ value: 1/7, penalty: 3, type: 'fraction', valtext: 'λ/7', plain: "1/7" },
+    //{ value: 1/8, penalty: 1, type: 'fraction', valtext: 'λ/8', plain: "1/8" }, // , valtext: '⅛' 
+    //{ value: 1/16, penalty: 1, type: 'fraction', valtext: 'λ/16', plain: "1/16" }, 
+    { value: 3/4, penalty: 5, type: 'fraction', valtext: '0.75λ', plain: "3/4" },
     //{ value: 5/8, penalty: 6, type: 'fraction' },
     //{ value: 2/3, penalty: 5, type: 'fraction' },
-    //{ value: 1/5, penalty: 4, type: 'fraction' },
     //{ value: 2/5, penalty: 4, type: 'fraction' },
     { value: 1, penalty: 7, type: 'whole', highlight: true },
+    { value: 1.5, pentaly: 4, type: 'fraction', valtext: '1.5λ', plain: "3/2"},
     { value: 2, penalty: 6, type: 'multiple' },
     { value: 3, penalty: 5, type: 'multiple' },
     { value: 4, penalty: 4, type: 'multiple' },
@@ -196,16 +258,18 @@ const factors = [
     { value: 13, penalty: 0.6, type: 'multiple' },
     { value: 14, penalty: 0.6, type: 'multiple' },
     { value: 15, penalty: 0.6, type: 'multiple' },
+    /*
     { value: 16, penalty: 0.6, type: 'multiple' },
     { value: 17, penalty: 0.6, type: 'multiple' },
     { value: 18, penalty: 0.6, type: 'multiple' },
     { value: 19, penalty: 0.6, type: 'multiple' },
     { value: 20, penalty: 0.6, type: 'multiple' }
+    */
 ];
 //set valtext for all
 for (let factor of factors) {
     if (!factor.valtext) {
-        factor.valtext = `${factor.type === 'fraction' ? factor.value.toFixed(2) : factor.value.toFixed(0)}`;
+        factor.valtext = factor.type === 'fraction' ? `${factor.value.toFixed(2)}λ` : `${factor.value.toFixed(0)}λ`;
     }
 }
 
@@ -233,12 +297,75 @@ function findConflicts(length, selectedBands, factors, vf) {
                 if (length >= minLength && length <= maxLength) { //  && maxWavelength * value <= calculateWavelength(maxDisplayFreq, vf)
                     const startFreqMHZ = (endFreq * value).toFixed(2);
                     const endFreqMHZ = (startFreq * value).toFixed(2);
-                    conflicts.add( {text: `${band} ${valtext}λ`, value, type, penalty, valtext } );
+                    conflicts.add( {band, text: `${band} ${valtext}`, value, type, penalty, valtext } );
                 }
             }
         }
     }
     return Array.from(conflicts);
+}
+
+function MinBand(length, vf) {
+    // find min band (e.g 20m), which length is at least 1/4 wavelength:
+    const minBands = Object.entries(frequencyRanges).find(([band, [startFreq, endFreq]]) => {
+        const minElectricalWavelength = calculateWavelength(endFreq, vf);
+        return length >= minElectricalWavelength / 4;
+    });
+    
+    return minBands ? minBands[0] : '';
+
+}
+function MinBandText(length, vf, selectedBands, conflicts) {
+    //length = wavelength with vf already applied
+    //vf = velocity factor to apply to bands
+
+    const wavelengthMultiples = [
+        { value: 1, text: 'this wire is longer than λ' },
+        { value: 0.75, text: 'this wire is longer than 0.75λ' },
+        { value: 0.5, text: 'this wire is longer than λ/2' },
+        { value: 0.25, text: 'this wire is longer than λ/4' }
+    ];
+
+    const count = -1; // how many to show, -1 for all.
+    
+    const cbands = selectedBands; // (in an array)
+    //const cbands = Object.entries(frequencyRanges);
+
+    const okBands = cbands.filter(([band, [startFreq, endFreq]]) => {
+        const minElectricalWavelength = calculateWavelength(endFreq, vf);
+        return length >= minElectricalWavelength / 4;
+    });
+    const bandDetails = okBands.map(([band, [startFreq, endFreq]]) => {
+        const minElectricalWavelength = calculateWavelength(endFreq, vf);
+        const maxElectricalWavelength = calculateWavelength(startFreq, vf);
+        //const minBand = MinBand(length, vf);
+        //const minBandText = minBand ? `${minBand} 0.25λ` : '';
+
+        const conflict = conflicts.find(obj => obj.band === band);
+        const conflictText = conflict ? `Intersects ${conflict.text}` : '';
+
+        const wavelengthMultiple = wavelengthMultiples.find(multiple => length >= maxElectricalWavelength * multiple.value);
+        const waveLengthText = wavelengthMultiple ? wavelengthMultiple.text : '';
+
+        return [band, {startFreq, endFreq, conflict, conflictText, waveLengthText} ];
+    });
+    //console.log('band deetails: ', bandDetails);
+    if (count >= 0) {
+        return formatBands(bandDetails.slice(0, count), count);
+    } else {
+        // show all
+        return formatBands(bandDetails, count);
+    }
+}
+
+function formatBands(bandDetails, count) {
+    //0: Object { band: "60m", text: "60m 0.25λ", value: 0.25, … }
+    return bandDetails ? bandDetails.map(([band, b]) => {
+        console.log('band: ', b);
+
+        const span = `<span ${b.conflict ? `title="${b.conflictText}"` : `title="For ${band} ${b.waveLengthText}"`}>${band}${b.conflict ? `*` : ``}</span>`;
+        return span;
+    }).join(', ') + ((bandDetails.length > count && count != -1) ? ', ...' : '') : '';
 }
 
 function calculate() {
@@ -280,11 +407,13 @@ function calculate() {
         const scoredPresetLens = presetLensFt.map((ft, index) => {
             const length = Number(ft) * 0.3048;
             const conflicts = findConflicts(length, selectedBands, factors, vf);
+            const minBand = MinBand(length, vf);
+            const minBandText = MinBandText(length, vf, selectedBands, conflicts);
             let score = 0;
             conflicts.forEach(conflict => {
                 score -= conflict.penalty;
             });
-            return { length, conflicts, score, originalIndex: index + 1, ft };
+            return { length, conflicts, score, minBand, minBandText, originalIndex: index + 1, ft };
         });
 
         scoredPresetLens.sort((a, b) => b.score - a.score);
@@ -296,7 +425,9 @@ function calculate() {
                 rank: index + 1,
                 length: `${length.toFixed(3)} m`,
                 size: `${result.ft} ft`,
-                conflicts: result.conflicts.map(o => o.text).join(', '),
+                conflictsText: result.conflicts.map(o => o.text).join(', '),
+                minBand: result.minBand,
+                minBandText: result.minBandText,
                 score: result.score,
                 originalIndex: result.originalIndex
             };
@@ -307,13 +438,15 @@ function calculate() {
         const tableBody = document.getElementById('resultsTable').querySelector('tbody');
         tableBody.innerHTML = '';
         results.forEach((result) => {
+            //todo: create hovertext to explain min band
+            
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${result.pos}</td>
                 <td>${result.rank}</td>
                 <td>${result.length}</td>
                 <td>${result.size}</td>
-                <td>${result.conflicts.length ? result.conflicts : '—'}</td>
+                <td style="text-align: left;">Usable bands: ${result.minBandText} ${result.conflictsText.length ? '<br>Intersects: ' + result.conflictsText : ''}</td>
             `;
             tableBody.appendChild(row);
         });
@@ -322,6 +455,7 @@ function calculate() {
         for (const [band, [startFreq, endFreq]] of selectedBands) {
             for (const freq of [startFreq, endFreq]) {
                 const wavelength = calculateWavelength(freq, vf);
+
                 for (const { value } of factors) {
                     const length = Math.round(wavelength * value * 1000) / 1000;
                     //if (length <= calculateWavelength(maxDisplayFreq, vf)) {
@@ -369,7 +503,9 @@ function calculate() {
 
         const results = topResults.map((result, index) => {
             const length = result.mid;
+            const minBand = MinBand(length, vf);
             const conflicts = findConflicts(length, selectedBands, factors, vf);
+            const minBandText = MinBandText(length, vf, selectedBands, conflicts);
             const feet = Math.floor(length * 3.28084);
             const inches = Math.floor((length * 3.28084 - feet) * 12);
             return {
@@ -377,7 +513,9 @@ function calculate() {
                 rank: index + 1,
                 length: `${length.toFixed(3)} m`,
                 size: `${feet} ft ${inches} in`,
-                conflicts: conflicts.map(o => o.text).join(', '),
+                minBand,
+                minBandText,
+                conflictsText: conflicts.map(o => o.text).join(', '),
                 score: result.score.toFixed(2),
                 originalIndex: result.originalIndex
             };
@@ -394,13 +532,13 @@ function calculate() {
                 <td>${result.rank}</td>
                 <td>${result.length}</td>
                 <td>${result.size}</td>
-                <td>${result.conflicts.length ? result.conflicts : '—'}</td>
+                <td style="text-align: left;">Usable bands: ${result.minBandText} ${result.conflictsText.length ? '<br>Intersects: ' + result.conflictsText : ''}</td>
             `;
             tableBody.appendChild(row);
         });
     }
 
-    console.log('Good lengths with conflicts:', typeof results !== 'undefined' ? results : 'results is not defined');
+    //console.log('Good lengths with conflicts:', typeof results !== 'undefined' ? results : 'results is not defined');
 
     sortTable(0);
 }
@@ -422,7 +560,7 @@ function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
                             [minWavelengthInSpace * value, maxWavelengthInSpace * value] :
                             [adjustedFreqMin, adjustedFreqMax];
             const col = highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB';
-            const lambda = (value == 1) ? '' : ` ${valtext}λ`
+            const lambda = (value == 1) ? '' : ` ${valtext}`
             const hovertext = `<b>${band} band${lambda}</b><br>${(adjustedFreqMin).toFixed(2)} to ${(adjustedFreqMax).toFixed(2)} MHz <br><i>λ=${(minWavelengthInSpace * value).toFixed(3)} to ${(maxWavelengthInSpace * value).toFixed(3)} m</i> <br><b>Wire lengths</b> (vf ${vf.toFixed(2)}):<br>${(minWavelength * value).toFixed(3)} – ${(maxWavelength * value).toFixed(3)} m`;
 
             if ((maxWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) || minWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) { 
