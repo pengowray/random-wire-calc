@@ -214,7 +214,6 @@ for (const p in presets) {
 var preset = presets['VE3EED'];
 
 const maxDisplayFreq = 1.6; // gets vf applied to it
-const defaultMaxWireLength = 200;
 const metersPerFoot = 0.3048;
 const feetPerMeter = 1 / metersPerFoot;
 const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
@@ -231,6 +230,27 @@ const frequencyRanges = {
     "12m": [24.89, 24.99],
     "10m": [28.0, 29.7],
     "6m": [50.0, 54.0]
+};
+
+const allBands = Object.keys(frequencyRanges);
+const allBandsSet = new Set(allBands);
+
+const defaultSettings = {
+    preset: 'calc',
+    velocityFactor: 0.95,
+    numResults: 25,
+    minWireLength: 7,
+    maxWireLength: 200,
+    hzUnits: false,
+    logarithmic: true,
+    bands: null
+};
+
+let suppressHashUpdate = false;
+
+const lastCalculatedLengths = {
+    min: { meters: defaultSettings.minWireLength, preferFeet: false },
+    max: { meters: defaultSettings.maxWireLength, preferFeet: false }
 };
 
 const factors = [
@@ -289,14 +309,25 @@ function calculateFrequency(length, vf) {
     return (speedOfLight * vf) / (length * 1e6);
 }
 
-function parseLengthInput(rawValue, fallbackMeters) {
+function formatNumber(value, precision = 3) {
+    if (!Number.isFinite(value)) {
+        return '';
+    }
+    let str = value.toFixed(precision);
+    if (str.includes('.')) {
+        str = str.replace(/0+$/, '').replace(/\.$/, '');
+    }
+    return str;
+}
+
+function interpretLengthInput(rawValue, fallbackMeters) {
     if (typeof rawValue !== 'string') {
-        return fallbackMeters;
+        return { meters: fallbackMeters, isFeet: false, valid: false };
     }
 
     const trimmed = rawValue.trim();
     if (!trimmed) {
-        return fallbackMeters;
+        return { meters: fallbackMeters, isFeet: false, valid: false };
     }
 
     const lower = trimmed.toLowerCase();
@@ -305,13 +336,13 @@ function parseLengthInput(rawValue, fallbackMeters) {
     const numbers = trimmed.match(/[-+]?\d*\.?\d+/g);
 
     if (!numbers) {
-        return fallbackMeters;
+        return { meters: fallbackMeters, isFeet: false, valid: false };
     }
 
     if (hasFeet) {
         const feetValue = parseFloat(numbers[0]);
         if (!Number.isFinite(feetValue)) {
-            return fallbackMeters;
+            return { meters: fallbackMeters, isFeet: false, valid: false };
         }
         let inchesValue = 0;
         if (hasInches && numbers.length > 1) {
@@ -320,15 +351,266 @@ function parseLengthInput(rawValue, fallbackMeters) {
                 inchesValue = parsedInches;
             }
         }
-        return (feetValue + inchesValue / 12) * metersPerFoot;
+        const meters = (feetValue + inchesValue / 12) * metersPerFoot;
+        return { meters, isFeet: true, valid: true };
     }
 
     const numericValue = parseFloat(numbers[0]);
     if (!Number.isFinite(numericValue)) {
-        return fallbackMeters;
+        return { meters: fallbackMeters, isFeet: false, valid: false };
     }
 
-    return numericValue;
+    return { meters: numericValue, isFeet: false, valid: true };
+}
+
+function formatLengthForHash(meters, preferFeet) {
+    if (!Number.isFinite(meters)) {
+        return '';
+    }
+    if (preferFeet) {
+        const feetValue = meters * feetPerMeter;
+        const roundedFeet = Math.round(feetValue);
+        if (Math.abs(feetValue - roundedFeet) < 1e-3) {
+            return `${roundedFeet}ft`;
+        }
+        return `${formatNumber(feetValue, 2)}ft`;
+    }
+    const roundedMeters = Math.round(meters);
+    if (Math.abs(meters - roundedMeters) < 1e-6) {
+        return `${roundedMeters}m`;
+    }
+    return `${formatNumber(meters, 3)}m`;
+}
+
+function getSelectedBandsSet() {
+    const selected = new Set();
+    for (const band of allBands) {
+        const checkbox = document.getElementById(band);
+        if (checkbox && checkbox.checked) {
+            selected.add(band);
+        }
+    }
+    return selected;
+}
+
+function setsEqual(a, b) {
+    if (!a || !b) {
+        return false;
+    }
+    if (a.size !== b.size) {
+        return false;
+    }
+    for (const value of a) {
+        if (!b.has(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function updateHashFromState() {
+    if (suppressHashUpdate) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+    const presetSelect = document.getElementById('preset');
+    const presetValue = presetSelect.value;
+
+    const vfValue = parseFloat(document.getElementById('velocityFactor').value);
+    if (Number.isFinite(vfValue) && Math.abs(vfValue - defaultSettings.velocityFactor) > 1e-4) {
+        params.set('vf', formatNumber(vfValue, 3));
+    }
+
+    const axisHz = document.getElementById('hzUnits').checked;
+    if (axisHz !== defaultSettings.hzUnits) {
+        params.set('axis', axisHz ? 'hz' : 'm');
+    }
+
+    const logarithmic = document.getElementById('logarithmic').checked;
+    if (logarithmic !== defaultSettings.logarithmic) {
+        params.set('scale', logarithmic ? 'log' : 'linear');
+    }
+
+    const selectedBands = getSelectedBandsSet();
+    if (defaultSettings.bands && !setsEqual(selectedBands, defaultSettings.bands)) {
+        if (selectedBands.size === allBandsSet.size) {
+            params.set('bands', 'all');
+        } else if (selectedBands.size === 0) {
+            params.set('bands', 'none');
+        } else {
+            const ordered = Array.from(selectedBands).sort((a, b) => allBands.indexOf(a) - allBands.indexOf(b));
+            params.set('bands', ordered.join('-'));
+        }
+    }
+
+    if (presetValue !== defaultSettings.preset && (presetValue === 'calc' || presetValue in presets)) {
+        params.set('preset', presetValue);
+    }
+
+    if (presetValue === 'calc') {
+        const numResultsValue = parseInt(document.getElementById('numResults').value, 10);
+        if (Number.isFinite(numResultsValue) && numResultsValue !== defaultSettings.numResults) {
+            params.set('results', numResultsValue);
+        }
+
+        const minLength = lastCalculatedLengths.min;
+        const maxLength = lastCalculatedLengths.max;
+        const lengthsDiffer = Math.abs(minLength.meters - maxLength.meters) > 1e-6;
+
+        if (lengthsDiffer) {
+            if (Math.abs(minLength.meters - defaultSettings.minWireLength) > 1e-6) {
+                params.set('min', formatLengthForHash(minLength.meters, minLength.preferFeet));
+            }
+            if (Math.abs(maxLength.meters - defaultSettings.maxWireLength) > 1e-6) {
+                params.set('max', formatLengthForHash(maxLength.meters, maxLength.preferFeet));
+            }
+        } else {
+            const differsFromDefaultMin = Math.abs(minLength.meters - defaultSettings.minWireLength) > 1e-6;
+            const differsFromDefaultMax = Math.abs(maxLength.meters - defaultSettings.maxWireLength) > 1e-6;
+            const defaultsEqual = Math.abs(defaultSettings.minWireLength - defaultSettings.maxWireLength) <= 1e-6;
+            if (differsFromDefaultMin || differsFromDefaultMax || !defaultsEqual) {
+                const preferFeet = minLength.preferFeet || maxLength.preferFeet;
+                params.set('wire', formatLengthForHash(minLength.meters, preferFeet));
+            }
+        }
+    } else if (presetValue in presets) {
+        const presetDetails = presets[presetValue];
+        if (presetDetails) {
+            const resultsPresetValue = parseInt(document.getElementById('numResultsPreset').value, 10);
+            if (Number.isFinite(resultsPresetValue) && resultsPresetValue !== presetDetails.count) {
+                params.set('results', resultsPresetValue);
+            }
+        }
+    }
+
+    const hashString = params.toString();
+    const newUrl = window.location.pathname + window.location.search + (hashString ? '#' + hashString : '');
+    history.replaceState(null, '', newUrl);
+}
+
+function applySettingsFromHash() {
+    const rawHash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
+    if (!rawHash) {
+        // Reset to defaults when no hash present
+        const presetSelect = document.getElementById('preset');
+        presetSelect.value = defaultSettings.preset;
+        document.getElementById('velocityFactor').value = formatNumber(defaultSettings.velocityFactor, 3) || defaultSettings.velocityFactor.toString();
+        document.getElementById('hzUnits').checked = defaultSettings.hzUnits;
+        document.getElementById('logarithmic').checked = defaultSettings.logarithmic;
+        document.getElementById('numResults').value = defaultSettings.numResults;
+        document.getElementById('numResultsPreset').value = defaultSettings.numResults;
+        document.getElementById('minWireM').value = String(defaultSettings.minWireLength);
+        document.getElementById('maxWireM').value = String(defaultSettings.maxWireLength);
+        if (defaultSettings.bands) {
+            allBands.forEach(band => {
+                const checkbox = document.getElementById(band);
+                if (checkbox) {
+                    checkbox.checked = defaultSettings.bands.has(band);
+                }
+            });
+        }
+        return;
+    }
+
+    const params = new URLSearchParams(rawHash);
+    const presetParam = params.get('preset');
+    const presetSelect = document.getElementById('preset');
+    if (presetParam && (presetParam === 'calc' || presetParam in presets)) {
+        presetSelect.value = presetParam;
+    } else {
+        presetSelect.value = defaultSettings.preset;
+    }
+
+    const vfParam = params.get('vf');
+    if (vfParam !== null) {
+        document.getElementById('velocityFactor').value = vfParam;
+    } else {
+        document.getElementById('velocityFactor').value = formatNumber(defaultSettings.velocityFactor, 3) || defaultSettings.velocityFactor.toString();
+    }
+
+    const axisParam = params.get('axis');
+    if (axisParam !== null) {
+        document.getElementById('hzUnits').checked = axisParam === 'hz';
+    } else {
+        document.getElementById('hzUnits').checked = defaultSettings.hzUnits;
+    }
+
+    const scaleParam = params.get('scale');
+    if (scaleParam !== null) {
+        document.getElementById('logarithmic').checked = scaleParam !== 'linear';
+    } else {
+        document.getElementById('logarithmic').checked = defaultSettings.logarithmic;
+    }
+
+    const resultsParam = params.get('results');
+    const presetValue = presetSelect.value;
+    const defaultResults = presetValue === 'calc' ? defaultSettings.numResults : (presets[presetValue] ? presets[presetValue].count : defaultSettings.numResults);
+    if (resultsParam !== null) {
+        const parsedResults = parseInt(resultsParam, 10);
+        if (Number.isFinite(parsedResults)) {
+            document.getElementById('numResults').value = parsedResults;
+            document.getElementById('numResultsPreset').value = parsedResults;
+        }
+    } else {
+        document.getElementById('numResults').value = defaultResults;
+        document.getElementById('numResultsPreset').value = defaultResults;
+    }
+
+    const minInput = document.getElementById('minWireM');
+    const maxInput = document.getElementById('maxWireM');
+    if (params.has('wire')) {
+        const wireValue = params.get('wire');
+        if (wireValue !== null) {
+            minInput.value = wireValue;
+            maxInput.value = wireValue;
+        }
+    } else {
+        if (params.has('min')) {
+            minInput.value = params.get('min');
+        } else {
+            minInput.value = String(defaultSettings.minWireLength);
+        }
+        if (params.has('max')) {
+            maxInput.value = params.get('max');
+        } else {
+            maxInput.value = String(defaultSettings.maxWireLength);
+        }
+    }
+
+    if (params.has('bands')) {
+        const bandParam = params.get('bands');
+        if (bandParam === 'all') {
+            allBands.forEach(band => {
+                const checkbox = document.getElementById(band);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        } else if (bandParam === 'none') {
+            allBands.forEach(band => {
+                const checkbox = document.getElementById(band);
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            });
+        } else if (bandParam) {
+            const targetBands = new Set(bandParam.split('-').filter(Boolean));
+            allBands.forEach(band => {
+                const checkbox = document.getElementById(band);
+                if (checkbox) {
+                    checkbox.checked = targetBands.has(band);
+                }
+            });
+        }
+    } else if (defaultSettings.bands) {
+        allBands.forEach(band => {
+            const checkbox = document.getElementById(band);
+            if (checkbox) {
+                checkbox.checked = defaultSettings.bands.has(band);
+            }
+        });
+    }
 }
 
 function findConflicts(length, selectedBands, factors, vf) {
@@ -422,21 +704,27 @@ function calculate() {
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
     const minWireInput = document.getElementById('minWireM');
     const maxWireInput = document.getElementById('maxWireM');
-    let minWireLen = parseLengthInput(minWireInput.value, 0);
-    let maxWireLen = parseLengthInput(maxWireInput.value, defaultMaxWireLength);
+    const minParsed = interpretLengthInput(minWireInput.value, defaultSettings.minWireLength);
+    const maxParsed = interpretLengthInput(maxWireInput.value, defaultSettings.maxWireLength);
+    let minWireLen = minParsed.meters;
+    let maxWireLen = maxParsed.meters;
 
     if (!Number.isFinite(minWireLen) || minWireLen < 0) {
-        minWireLen = 0;
+        minWireLen = defaultSettings.minWireLength;
     }
     if (!Number.isFinite(maxWireLen) || maxWireLen < 0) {
-        maxWireLen = defaultMaxWireLength;
+        maxWireLen = defaultSettings.maxWireLength;
     }
     if (maxWireLen < minWireLen) {
         maxWireLen = minWireLen;
     }
 
+    const lengthsEqual = Math.abs(maxWireLen - minWireLen) < 1e-9;
+    const sharedFeetPreference = (minParsed.isFeet || maxParsed.isFeet) && lengthsEqual;
+    lastCalculatedLengths.min = { meters: minWireLen, preferFeet: sharedFeetPreference ? true : minParsed.isFeet };
+    lastCalculatedLengths.max = { meters: maxWireLen, preferFeet: sharedFeetPreference ? true : maxParsed.isFeet };
+
     const presetChoice = document.getElementById('preset').value;
-    const wasPreset = numResultsInputPreset.classList.contains('hidden');
     let numResults = 10;
 
     presetMode = presetChoice === 'calc' ? false : true;
@@ -614,6 +902,7 @@ function calculate() {
     //console.log('Good lengths with conflicts:', typeof results !== 'undefined' ? results : 'results is not defined');
 
     sortTable(0);
+    updateHashFromState();
 }
 
 function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
@@ -806,7 +1095,22 @@ document.getElementById('minWireM').addEventListener('input', (event) => {
 document.getElementById('maxWireM').addEventListener('input', (event) => {
     calculate();
 });
-document.addEventListener('DOMContentLoaded', calculate);
+document.addEventListener('DOMContentLoaded', () => {
+    if (!defaultSettings.bands) {
+        defaultSettings.bands = getSelectedBandsSet();
+    }
+    suppressHashUpdate = true;
+    applySettingsFromHash();
+    suppressHashUpdate = false;
+    calculate();
+});
+
+window.addEventListener('hashchange', () => {
+    suppressHashUpdate = true;
+    applySettingsFromHash();
+    suppressHashUpdate = false;
+    calculate();
+});
 
 </script>
 
