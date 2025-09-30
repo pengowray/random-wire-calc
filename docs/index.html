@@ -73,6 +73,8 @@
     <input type="number" id="numResultsPreset" value="13" min="1">
     <label for="minWireM">Min wire length (m): </label>
     <input type="number" id="minWireM" value="7" min="0">
+    <label for="maxWireM">Max wire length (m): </label>
+    <input type="number" id="maxWireM" value="200" min="0">
     <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
     <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
     <br>
@@ -212,7 +214,7 @@ for (const p in presets) {
 var preset = presets['VE3EED'];
 
 const maxDisplayFreq = 1.6; // gets vf applied to it
-const maxAllowedWireLength = 200;
+const defaultMaxWireLength = 200;
 const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
 
 const frequencyRanges = {
@@ -374,14 +376,26 @@ function calculate() {
     const numResultsInputPreset = document.getElementById('numResultsPreset');
     const logarithmic = document.getElementById('logarithmic').checked;
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
-    const minWireLen = parseFloat(document.getElementById('minWireM').value);
+    let minWireLen = parseFloat(document.getElementById('minWireM').value);
+    let maxWireLen = parseFloat(document.getElementById('maxWireM').value);
+
+    if (!Number.isFinite(minWireLen) || minWireLen < 0) {
+        minWireLen = 0;
+    }
+    if (!Number.isFinite(maxWireLen) || maxWireLen < 0) {
+        maxWireLen = defaultMaxWireLength;
+    }
+    if (maxWireLen < minWireLen) {
+        maxWireLen = minWireLen;
+    }
 
     const presetChoice = document.getElementById('preset').value;
     const wasPreset = numResultsInputPreset.classList.contains('hidden');
     let numResults = 10;
 
     presetMode = presetChoice === 'calc' ? false : true;
-    minWireM.disabled = presetMode;
+    document.getElementById('minWireM').disabled = presetMode;
+    document.getElementById('maxWireM').disabled = presetMode;
 
     if (presetMode) {
         preset = presets[presetChoice];
@@ -466,20 +480,32 @@ function calculate() {
         }
 
         const avoidList = Array.from(avoidSet).sort((a, b) => a - b);
-        const midPoints = [];
-        const bandwidths = [];
 
-        for (let i = 0; i < avoidList.length - 1; i++) {
-            const midPoint = (avoidList[i] + avoidList[i + 1]) / 2;
-            const bandwidth = avoidList[i + 1] - avoidList[i];
-            if (midPoint < minWireLen) continue;
-            if (midPoint >= maxAllowedWireLength) continue;
-            midPoints.push(midPoint);
-            bandwidths.push(bandwidth);
+        let candidateSegments = [];
+
+        if (Math.abs(maxWireLen - minWireLen) < 1e-9) {
+            candidateSegments.push({ mid: minWireLen, bandwidth: 0 });
+        } else {
+            const relevantAvoid = avoidList.filter(length => length > minWireLen && length < maxWireLen);
+            const boundaries = [minWireLen, ...relevantAvoid, maxWireLen];
+
+            for (let i = 0; i < boundaries.length - 1; i++) {
+                const start = boundaries[i];
+                const end = boundaries[i + 1];
+                if (end <= start) continue;
+                const midPoint = (start + end) / 2;
+                const bandwidth = end - start;
+                candidateSegments.push({ mid: midPoint, bandwidth });
+            }
+
+            if (!candidateSegments.length) {
+                candidateSegments.push({ mid: minWireLen, bandwidth: 0 });
+            }
         }
 
-        const scoredMidPoints = midPoints.map((mid, index) => {
-            let score = bandwidths[index] / mid;
+        const scoredMidPoints = candidateSegments.map(({ mid, bandwidth }, index) => {
+            const baseScore = bandwidth > 0 ? bandwidth / mid : 0;
+            let score = baseScore;
             const conflicts = findConflicts(mid, selectedBands, factors, vf);
             const debugInfo = [];
             debugInfo.push({ score });
@@ -488,7 +514,7 @@ function calculate() {
                 debugInfo.push({ conflict });
             });
             console.log(`Midpoint: ${mid.toFixed(3)} m, Score: ${score.toFixed(2)}, Debug Info:`, debugInfo);
-            return { mid, bandwidth: bandwidths[index], score, conflicts, originalIndex: index + 1 };
+            return { mid, bandwidth, score, conflicts, originalIndex: index + 1 };
         });
 
         scoredMidPoints.sort((a, b) => b.score - a.score);
@@ -728,6 +754,9 @@ document.getElementById('numResults').addEventListener('input', (event) => {
     calculate();
 });
 document.getElementById('minWireM').addEventListener('input', (event) => {
+    calculate();
+});
+document.getElementById('maxWireM').addEventListener('input', (event) => {
     calculate();
 });
 document.addEventListener('DOMContentLoaded', calculate);
