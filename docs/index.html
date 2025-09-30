@@ -72,9 +72,9 @@
     <input type="number" id="numResults" value="25" min="1">
     <input type="number" id="numResultsPreset" value="13" min="1">
     <label for="minWireM">Min wire length (m): </label>
-    <input type="number" id="minWireM" value="7" min="0">
+    <input type="text" id="minWireM" value="7" inputmode="decimal" aria-label="Minimum wire length">
     <label for="maxWireM">Max wire length (m): </label>
-    <input type="number" id="maxWireM" value="200" min="0">
+    <input type="text" id="maxWireM" value="200" inputmode="decimal" aria-label="Maximum wire length">
     <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
     <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
     <br>
@@ -215,6 +215,8 @@ var preset = presets['VE3EED'];
 
 const maxDisplayFreq = 1.6; // gets vf applied to it
 const defaultMaxWireLength = 200;
+const metersPerFoot = 0.3048;
+const feetPerMeter = 1 / metersPerFoot;
 const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
 
 const frequencyRanges = {
@@ -285,6 +287,48 @@ function calculateWavelength(freq, vf) {
 
 function calculateFrequency(length, vf) {
     return (speedOfLight * vf) / (length * 1e6);
+}
+
+function parseLengthInput(rawValue, fallbackMeters) {
+    if (typeof rawValue !== 'string') {
+        return fallbackMeters;
+    }
+
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+        return fallbackMeters;
+    }
+
+    const lower = trimmed.toLowerCase();
+    const hasFeet = /(ft\.?\b|feet\b|foot\b|['’′])/i.test(lower);
+    const hasInches = /("|”|″|in\b)/i.test(lower);
+    const numbers = trimmed.match(/[-+]?\d*\.?\d+/g);
+
+    if (!numbers) {
+        return fallbackMeters;
+    }
+
+    if (hasFeet) {
+        const feetValue = parseFloat(numbers[0]);
+        if (!Number.isFinite(feetValue)) {
+            return fallbackMeters;
+        }
+        let inchesValue = 0;
+        if (hasInches && numbers.length > 1) {
+            const parsedInches = parseFloat(numbers[1]);
+            if (Number.isFinite(parsedInches)) {
+                inchesValue = parsedInches;
+            }
+        }
+        return (feetValue + inchesValue / 12) * metersPerFoot;
+    }
+
+    const numericValue = parseFloat(numbers[0]);
+    if (!Number.isFinite(numericValue)) {
+        return fallbackMeters;
+    }
+
+    return numericValue;
 }
 
 function findConflicts(length, selectedBands, factors, vf) {
@@ -376,8 +420,10 @@ function calculate() {
     const numResultsInputPreset = document.getElementById('numResultsPreset');
     const logarithmic = document.getElementById('logarithmic').checked;
     const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
-    let minWireLen = parseFloat(document.getElementById('minWireM').value);
-    let maxWireLen = parseFloat(document.getElementById('maxWireM').value);
+    const minWireInput = document.getElementById('minWireM');
+    const maxWireInput = document.getElementById('maxWireM');
+    let minWireLen = parseLengthInput(minWireInput.value, 0);
+    let maxWireLen = parseLengthInput(maxWireInput.value, defaultMaxWireLength);
 
     if (!Number.isFinite(minWireLen) || minWireLen < 0) {
         minWireLen = 0;
@@ -394,8 +440,8 @@ function calculate() {
     let numResults = 10;
 
     presetMode = presetChoice === 'calc' ? false : true;
-    document.getElementById('minWireM').disabled = presetMode;
-    document.getElementById('maxWireM').disabled = presetMode;
+    minWireInput.disabled = presetMode;
+    maxWireInput.disabled = presetMode;
 
     if (presetMode) {
         preset = presets[presetChoice];
@@ -419,7 +465,7 @@ function calculate() {
         const presetLensFt = preset.feet.split(' ').filter(num => num);
         
         const scoredPresetLens = presetLensFt.map((ft, index) => {
-            const length = Number(ft) * 0.3048;
+            const length = Number(ft) * metersPerFoot;
             const conflicts = findConflicts(length, selectedBands, factors, vf);
             const minBand = MinBand(length, vf);
             const minBandText = MinBandText(length, vf, selectedBands, conflicts);
@@ -532,8 +578,9 @@ function calculate() {
             const minBand = MinBand(length, vf);
             const conflicts = findConflicts(length, selectedBands, factors, vf);
             const minBandText = MinBandText(length, vf, selectedBands, conflicts);
-            const feet = Math.floor(length * 3.28084);
-            const inches = Math.floor((length * 3.28084 - feet) * 12);
+            const totalFeet = length * feetPerMeter;
+            const feet = Math.floor(totalFeet);
+            const inches = Math.floor((totalFeet - feet) * 12);
             return {
                 pos: lengthToPosMap[result.mid],
                 rank: index + 1,
