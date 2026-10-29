@@ -16,8 +16,23 @@ const DEFAULTS = {
 };
 // Suggestions are cut between lengths that score within this many points of the suggestion.
 const TOLERANCE = 3;
-// "Compare with" values that draw a second score line for another counterpoise setting.
-const CP_COMPARE = { 'cp-wire': 'wire', 'cp-radials': 'radials', 'cp-coax': 'coax' };
+// "Compare with" groups that draw a second score line for another value of one setting.
+// Values are "<prefix>-<value>", e.g. "cp-coax" or "match-4". The options come from the
+// setting's own dropdown (custom VF left out).
+const COMPARE_SETTINGS = [
+    { prefix: 'cp', select: 'cpKind', setting: 'Counterpoise', group: 'Counterpoise settings' },
+    { prefix: 'wire', select: 'wireType', setting: 'Wire', group: 'Wire settings' },
+    { prefix: 'match', select: 'matching', setting: 'Matching', group: 'Matching settings' },
+    { prefix: 'tuner', select: 'tuner', setting: 'Tuner', group: 'Tuner settings' },
+];
+function parseCompare(v) {
+    const i = (v || '').indexOf('-');
+    const spec = i > 0 && COMPARE_SETTINGS.find(c => c.prefix === v.slice(0, i));
+    if (!spec) return null;
+    const value = v.slice(i + 1);
+    const ok = [...$(spec.select).options].some(o => o.value === value && o.value !== 'custom');
+    return ok ? { spec, value } : null;
+}
 
 let sortKey = 'rank', sortDir = 1;
 let suppressHash = false;
@@ -30,10 +45,15 @@ function init() {
     const lists = document.createElement('optgroup');
     lists.label = 'Published length lists';
     for (const [key, p] of Object.entries(PRESETS)) lists.appendChild(new Option(p.name, key));
-    const cps = document.createElement('optgroup');
-    cps.label = 'Counterpoise settings';
-    for (const key of Object.keys(CP_COMPARE)) cps.appendChild(new Option('', key));
-    compareSel.append(lists, cps);
+    compareSel.append(lists);
+    for (const spec of COMPARE_SETTINGS) {
+        const g = document.createElement('optgroup');
+        g.label = spec.group;
+        for (const o of $(spec.select).options) {
+            if (o.value !== 'custom') g.appendChild(new Option(o.text, `${spec.prefix}-${o.value}`));
+        }
+        compareSel.append(g);
+    }
 
     applyHash();
     buildBandList();
@@ -42,7 +62,6 @@ function init() {
         el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
             if (el.id === 'region') buildBandList();
             if (el.id === 'units') convertPlainLengths(el.value);
-            if (el.id === 'cpKind' && CP_COMPARE[$('compare').value] === el.value) $('compare').value = '';
             update();
         });
     });
@@ -138,30 +157,55 @@ function readSettings() {
         coax: { kind: 'coax', lengthM: coaxP && coaxP.metres > 0 ? coaxP.metres : 10, isFeet: !!coaxP?.isFeet },
     };
     const counterpoise = counterpoises[cpKind];
+    const setup = { vf, counterpoise };
+    const ratio = Number($('matching').value), maxSwr = Number($('tuner').value);
+    updateCompareOptions(counterpoises);
     const compare = $('compare').value;
-    updateCompareOptions(counterpoises, cpKind);
+
+    // The "Compare with" setting value, as a second set of settings.
+    let comparison = null;
+    const cmp = parseCompare(compare);
+    if (cmp) {
+        const { spec, value } = cmp;
+        const alt = { setup, ratio, maxSwr };
+        if (spec.prefix === 'cp') alt.setup = { ...setup, counterpoise: counterpoises[value] };
+        if (spec.prefix === 'wire') alt.setup = { ...setup, vf: Number(value) };
+        if (spec.prefix === 'match') alt.ratio = Number(value);
+        if (spec.prefix === 'tuner') alt.maxSwr = Number(value);
+        const name = spec.prefix === 'cp' ? cpName(counterpoises[value]) : optionText(spec.select, value);
+        const mainName = spec.prefix === 'cp' ? cpName(counterpoise)
+            : spec.prefix === 'wire' && wire === 'custom' ? `Custom wire (VF ${trim(vf, 3)})` : optionText(spec.select, $(spec.select).value);
+        comparison = { ...alt, setting: spec.setting, name: lowerFirst(name), mainName: lowerFirst(mainName) };
+    }
 
     return {
         bands, min, max, rangeNote, minFeet: !!minP?.isFeet, maxFeet: !!maxP?.isFeet,
-        setup: { vf, counterpoise },
-        ratio: Number($('matching').value), maxSwr: Number($('tuner').value),
+        setup, ratio, maxSwr,
         count: clampInt($('count').value, 1, 40, 10),
         spacing: Math.max(0, parseFloat($('spacing').value) || 0) / 100,
         units: $('units').value, log: $('logAxis').checked,
-        compare, altCounterpoise: CP_COMPARE[compare] ? counterpoises[CP_COMPARE[compare]] : null,
+        compare, comparison,
     };
 }
 
-// Option text for the counterpoise choices in "Compare with". The current setting is listed
-// but disabled.
-function updateCompareOptions(counterpoises, current) {
-    for (const opt of $('compare').querySelectorAll('option')) {
-        const kind = CP_COMPARE[opt.value];
-        if (!kind) continue;
-        opt.text = cpName(counterpoises[kind]);
-        opt.disabled = kind === current;
+// "Compare with" setting options: counterpoise options show their lengths, and the option
+// matching the current setting is disabled. If the selected comparison now matches the
+// current setting, the comparison is turned off.
+function updateCompareOptions(counterpoises) {
+    const sel = $('compare');
+    for (const opt of sel.querySelectorAll('option')) {
+        const cmp = parseCompare(opt.value);
+        if (!cmp) continue;
+        if (cmp.spec.prefix === 'cp') opt.text = cpName(counterpoises[cmp.value]);
+        opt.disabled = $(cmp.spec.select).value === cmp.value;
     }
+    if (sel.selectedOptions[0]?.disabled) sel.value = '';
 }
+
+function optionText(selectId, value) {
+    return [...$(selectId).options].find(o => o.value === value)?.text || value;
+}
+function lowerFirst(t) { return /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t; }
 
 // "Counterpoise wire, 5 m", "Ground radials", "Coax shield only, 10 m of coax"
 function cpName(cp) {
@@ -169,7 +213,6 @@ function cpName(cp) {
     if (cp.kind === 'coax') return `Coax shield only, ${fmtCp(cp)} of coax`;
     return 'Ground radials';
 }
-function cpNameLower(cp) { const n = cpName(cp); return n[0].toLowerCase() + n.slice(1); }
 
 function update() {
     const s = readSettings();
@@ -199,14 +242,15 @@ function update() {
     const details = new Map(suggestions.map(sg => [sg.rank, evaluateLength(sg.lengthM, ctx)]));
     const presets = presetM.map((m, i) => ({ feet: presetFeet[i], lengthM: m, ...evaluateLength(m, ctx) }));
     const checked = check.metres ? evaluateLength(check.metres, ctx) : null;
-    // Second score line: the same settings with the "Compare with" counterpoise.
+    // Second score line: the same settings with the "Compare with" setting value.
     let alt = null;
-    if (s.altCounterpoise) {
-        const altCtx = makeContext(s.bands, { ...s.setup, counterpoise: s.altCounterpoise }, { ratio: s.ratio, maxSwr: s.maxSwr });
+    const c = s.comparison;
+    if (c) {
+        const altCtx = makeContext(s.bands, c.setup, { ratio: c.ratio, maxSwr: c.maxSwr });
         const altSw = sweep(altCtx, sw.lengths);
         const best = pickSuggestions(altSw, { count: 1, spacing: s.spacing, tolerance: TOLERANCE, minM: s.min, maxM: s.max })[0];
         alt = {
-            cp: s.altCounterpoise, ctx: altCtx, scores: altSw.scores, best,
+            name: c.name, mainName: c.mainName, setting: c.setting, ctx: altCtx, scores: altSw.scores, best,
             suggestionScores: new Map(suggestions.map(sg => [sg.rank, evaluateLength(sg.lengthM, altCtx).score])),
         };
     }
@@ -267,17 +311,17 @@ function nearestSuggestion(m, suggestions) {
 function renderChart() {
     const { s, sw, suggestions, presets, checked, ctx, alt } = last;
     const top = suggestions[0];
-    const withCp = alt ? ` with ${cpNameLower(s.setup.counterpoise)}` : '';
+    const withCp = alt ? ` with ${alt.mainName}` : '';
     const altTxt = alt && alt.best
-        ? ` With ${cpNameLower(alt.cp)}: ${formatBoth(alt.best.lengthM, s.units)}, score ${alt.best.score.toFixed(0)}.` : '';
+        ? ` With ${alt.name}: ${formatBoth(alt.best.lengthM, s.units)}, score ${alt.best.score.toFixed(0)}.` : '';
     $('chartSummary').textContent = top
         ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}${withCp}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}.${altTxt} Lower panel: each band's score${withCp}; blue is inside your tuner's limit, red is beyond it.`
         : '';
     drawChart($('plot'), {
         sw, bands: ctx.bands.map(b => b.name), suggestions, presets, checked,
         presetName: PRESETS[s.compare] ? PRESETS[s.compare].name : '', range: { min: s.min, max: s.max },
-        scoreName: alt ? `Score with ${cpNameLower(s.setup.counterpoise)}` : 'Score',
-        alt: alt ? { scores: alt.scores, name: `Score with ${cpNameLower(alt.cp)}`, best: alt.best } : null,
+        scoreName: alt ? `Score with ${alt.mainName}` : 'Score',
+        alt: alt ? { scores: alt.scores, name: `Score with ${alt.name}`, best: alt.best } : null,
     }, { units: s.units, log: s.log }, m => { $('checkLen').value = toInput(m); update(); });
 }
 
@@ -287,10 +331,10 @@ function renderSuggestions() {
     const altHead = $('altScoreHead');
     altHead.classList.toggle('hidden', !alt);
     // While a comparison is shown, the main Score column names its counterpoise too.
-    $('suggestions').querySelector('th[data-sort="score"]').textContent = alt ? `Score with ${cpNameLower(s.setup.counterpoise)}` : 'Score';
+    $('suggestions').querySelector('th[data-sort="score"]').textContent = alt ? `Score with ${alt.mainName}` : 'Score';
     if (alt) {
-        altHead.textContent = `Score with ${cpNameLower(alt.cp)}`;
-        altHead.title = `Score at this length if the Counterpoise setting is ${cpNameLower(alt.cp)}. All other settings are the same.`;
+        altHead.textContent = `Score with ${alt.name}`;
+        altHead.title = `Score at this length if the ${alt.setting} setting is ${alt.name}. All other settings are the same.`;
     }
     $('suggestionsTitle').textContent = `Suggested lengths (${suggestions.length})`;
     const hopelessTxt = hopelessNote(hopeless);
@@ -533,7 +577,7 @@ function applyHash() {
     if (p.get('scale') === 'log') c.log = true;
     if (p.has('check')) c.check = p.get('check');
     const compare = p.get('compare') || p.get('preset');
-    if (compare && (PRESETS[compare] || CP_COMPARE[compare])) c.compare = compare;
+    if (compare && (PRESETS[compare] || parseCompare(compare))) c.compare = compare;
     else if (compare === 'sprott_feet') c.compare = 'sprott';
     setControls(c);
 }

@@ -16,7 +16,7 @@
 - Old page kept at docs/old/.
 - "Coax shield only" counterpoise (no counterpoise wire; the coax length matters), fitted to
   NEC runs of coax lying on the ground. "Compare with" can draw a second score line for
-  another counterpoise setting.
+  another value of the Counterpoise, Wire, Matching or Tuner setting.
 - Wire loss is a series loss per metre (as for the coax shield) instead of a fixed resistance at
   the current maximum. 80m and 40m band scores were 7 to 8 points higher than NEC's; now 3.
 
