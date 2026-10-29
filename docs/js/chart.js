@@ -141,8 +141,9 @@ export function drawChart(el, data, opts, onPick) {
     // Plotly's Reset axes and double-click go back to the range of the first draw, not the
     // current one, so after a settings change they showed the wrong lengths. Both are replaced
     // with "Show whole range", which uses the range of the latest draw.
-    el._wholeRange = layout.xaxis.range;
-    const showWhole = gd => Plotly.relayout(gd, { 'xaxis.range': gd._wholeRange });
+    // Copies: Plotly writes zoomed ranges into the layout's own range array.
+    el._wholeRange = [...layout.xaxis.range];
+    const showWhole = gd => Plotly.relayout(gd, { 'xaxis.range': [...gd._wholeRange] });
     Plotly.react(el, traces, layout, {
         responsive: true, displaylogo: false, displayModeBar: narrow ? false : 'hover', doubleClick: false,
         modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'resetScale2d'],
