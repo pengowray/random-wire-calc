@@ -148,7 +148,12 @@ function update() {
     const presets = presetM.map((m, i) => ({ feet: presetFeet[i], lengthM: m, ...evaluateLength(m, ctx) }));
     const checked = check.metres ? evaluateLength(check.metres, ctx) : null;
 
-    last = { s, ctx, sw, suggestions, details, presets, checked, check };
+    // Bands that stay beyond the tuner's limit at every length in the range. They are named
+    // once above the table instead of being every row's worst band.
+    const hopeless = new Set(ctx.bands.filter((b, bi) =>
+        !sw.lengths.some((L, j) => L >= s.min && L <= s.max && sw.bandScores[bi][j] >= 50)).map(b => b.name));
+
+    last = { s, ctx, sw, suggestions, details, presets, checked, check, hopeless };
     renderCheck();
     renderChart();
     renderSuggestions();
@@ -210,10 +215,11 @@ function renderChart() {
 
 function renderSuggestions() {
     if (!last) return;
-    const { s, suggestions, details, checked } = last;
+    const { s, suggestions, details, checked, hopeless } = last;
     $('suggestionsTitle').textContent = `Suggested lengths (${suggestions.length})`;
+    const hopelessTxt = hopelessNote(hopeless);
     $('suggestionsNote').textContent = suggestions.length
-        ? `Between ${fmtLen(s.min)} and ${fmtLen(s.max)}, at least ${trim(s.spacing * 100, 1)}% apart. Click a row to see it band by band.`
+        ? `Between ${fmtLen(s.min)} and ${fmtLen(s.max)}, at least ${trim(s.spacing * 100, 1)}% apart. Click a row to see it band by band.${hopelessTxt}`
         : '';
     document.querySelectorAll('#suggestions th[data-sort]').forEach(th => {
         th.setAttribute('aria-sort', th.dataset.sort === sortKey ? (sortDir > 0 ? 'ascending' : 'descending') : 'none');
@@ -229,7 +235,7 @@ function renderSuggestions() {
     for (const g of rows) {
         const d = details.get(g.rank);
         const ok = d.bands.filter(b => b.inRange >= 1).length;
-        const worst = d.bands.reduce((w, b) => (!w || b.score < w.score ? b : w), null);
+        const worst = worstBand(d.bands, hopeless);
         const tr = document.createElement('tr');
         tr.className = 'clickable';
         if (checked && Math.abs(checked.lengthM - g.lengthM) < 0.005) tr.classList.add('selected');
@@ -255,12 +261,12 @@ function renderCompare() {
     $('compareTitle').textContent = `Compared with: ${p.name} (${presets.length} lengths)`;
     const best = presets.reduce((b, x) => (!b || x.score > b.score ? x : b), null);
     $('compareNote').innerHTML = `Scored with your settings. Best published length: ${best.feet} ft, score ${best.score.toFixed(0)}.`
-        + (p.url ? ` <a href="${p.url}">Source</a>.` : '');
+        + (p.url ? ` <a href="${p.url}">Source</a>.` : '') + esc(hopelessNote(last.hopeless));
     const tbody = $('compareTable').querySelector('tbody');
     tbody.innerHTML = '';
     for (const x of presets) {
         const ok = x.bands.filter(b => b.inRange >= 1).length;
-        const worst = x.bands.reduce((w, b) => (!w || b.score < w.score ? b : w), null);
+        const worst = worstBand(x.bands, last.hopeless);
         const near = nearestSuggestion(x.lengthM, suggestions);
         const outside = x.lengthM < s.min || x.lengthM > s.max;
         const tr = document.createElement('tr');
@@ -307,6 +313,22 @@ function renderBands() {
             <td class="note">${notes.join(' ')}</td>`;
         tbody.appendChild(tr);
     }
+}
+
+function hopelessNote(hopeless) {
+    if (!hopeless.size) return '';
+    const one = hopeless.size === 1;
+    return ` ${listBands(hopeless)} ${one ? 'is' : 'are'} beyond your tuner's limit at every length in the length range, so the Worst band column leaves ${one ? 'it' : 'them'} out.`;
+}
+
+function worstBand(bands, skip) {
+    const pool = bands.filter(b => !skip.has(b.name));
+    return (pool.length ? pool : bands).reduce((w, b) => (!w || b.score < w.score ? b : w), null);
+}
+
+function listBands(set) {
+    const a = [...set];
+    return a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
 }
 
 function scoreCell(score) {
