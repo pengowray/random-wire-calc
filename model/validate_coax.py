@@ -2,12 +2,12 @@
 VK bands 80m to 10m, 9:1, 10 m of coax, tuner limit 10:1. Writes img/score-validation-coax.png."""
 import json, csv, numpy as np
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
-from tlmodel import stub, coax_stub
+from tlmodel import stub
 W = json.load(open('fit.json')); X = json.load(open('fit_coax.json'))
 z0w = W['k0'] * 60 * np.log(4 * 8 / 0.0016)
 COAX = 10
 def zmodel(L, f):
-    return stub(L, f, z0w, W['vf'], W['rl'], W['rs']) + coax_stub(COAX, f, X['z0'], X['vf'], X['rp'], X['p'], X['rs'])
+    return stub(L, f, z0w, W['vf'], W['rp'], W['p'], W['rs']) + stub(COAX, f, X['z0'], X['vf'], X['rp'], X['p'], X['rs'])
 d = np.array([list(map(float, r)) for r in csv.reader(open('data/bands_coax10.csv'))])
 d = d[d[:, 0] > 2.5]  # 160m left out: NEC-2 gives negative feed resistance there (see fit_coax.py)
 def swr(Z, n=9):

@@ -21,9 +21,9 @@ test('radiation resistance: half-wave dipole 73 ohms, quarter-wave monopole 36.5
 });
 
 test('feedpoint impedance matches the Python reference model (model/tlmodel.py)', () => {
-    const setup = { vf: 0.9918, counterpoise: { kind: 'wire', lengthM: 5 } };
-    const ref = [[10, 7.1, 44.37, -428.92], [20, 7.1, 1622.11, 819.34], [37.2, 14.2, 78.88, 75.47],
-        [12.5, 3.6, 43.55, -1270.29], [60, 28.5, 3466.51, -164.8]];
+    const setup = { vf: 0.991, counterpoise: { kind: 'wire', lengthM: 5 } };
+    const ref = [[10, 7.1, 29.69, -434.99], [20, 7.1, 1695.35, 1071.21], [37.2, 14.2, 91.05, 78.61],
+        [12.5, 3.6, 11.09, -1285.62], [60, 28.5, 3740.6, -368.64], [7, 3.6, 6.0, -1738.68]];
     for (const [L, f, r, x] of ref) {
         const [zr, zx] = feedImpedance(L, f, setup);
         const err = Math.hypot(zr - r, zx - x) / Math.hypot(r, x);
@@ -31,11 +31,11 @@ test('feedpoint impedance matches the Python reference model (model/tlmodel.py)'
     }
 });
 
-test('coax shield counterpoise matches the Python reference model (model/tlmodel.py coax_stub)', () => {
-    const ref = [[10, 7.1, 10, 102.89, -44.79], [20, 3.6, 10, 69.53, -316.19], [37.2, 14.2, 5, 112.86, 65.71],
-        [30, 28.5, 20, 588.42, 451.86], [15, 1.85, 10, 94.62, -1375.84]];
+test('coax shield counterpoise matches the Python reference model (model/tlmodel.py stub)', () => {
+    const ref = [[10, 7.1, 10, 92.1, -45.45], [20, 3.6, 10, 55.78, -325.54], [37.2, 14.2, 5, 122.45, 68.7],
+        [30, 28.5, 20, 637.27, 433.82], [15, 1.85, 10, 24.62, -1401.53]];
     for (const [L, f, coax, r, x] of ref) {
-        const [zr, zx] = feedImpedance(L, f, { vf: 0.9918, counterpoise: { kind: 'coax', lengthM: coax } });
+        const [zr, zx] = feedImpedance(L, f, { vf: 0.991, counterpoise: { kind: 'coax', lengthM: coax } });
         const err = Math.hypot(zr - r, zx - x) / Math.hypot(r, x);
         assert.ok(err < 0.01, `${L} m, ${coax} m coax, ${f} MHz: got ${zr.toFixed(1)}${zx.toFixed(1)}j, want ${r}${x}j`);
     }

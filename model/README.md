@@ -7,9 +7,10 @@ band. This folder has the NEC-2 simulations used to fit and check that model.
 
 - The wire and the counterpoise are each an open-ended lossy transmission line,
   `Zin = Z0·coth((α + jβ)L)`, connected in series at the feedpoint.
-- `αL = (k·Rrad(kL) + Rloss) / Z0`, so the input resistance at a current maximum is the
-  radiation resistance plus a loss resistance. `Rrad` is the standard sinusoidal-current
-  formula (73 Ω for a half-wave dipole; a monopole is half a dipole of twice the length).
+- Each line has a series loss of `r·(f / 10 MHz)^p` ohms per metre, plus radiation as extra
+  attenuation `k·Rrad(kL) / Z0` over the whole line, so radiation adds `k·Rrad` to the input
+  resistance at a current maximum. `Rrad` is the standard sinusoidal-current formula (73 Ω
+  for a half-wave dipole; a monopole is half a dipole of twice the length).
 - The impedance is divided by the transformer ratio (9 for a 9:1 unun) and turned into SWR
   on 50 Ω coax.
 - Each test frequency gets a mark `1 / (1 + (ln SWR / ln SWRmax)^4)`: 0.5 at the tuner's
@@ -20,14 +21,22 @@ Fitted constants (`fit.json`, from `fit2.py`):
 
 | Constant | Value | Meaning |
 |---|---|---|
-| wire Z0 | 462 Ω | `0.778 × 60·ln(4h/d)` at h = 8 m, d = 1.6 mm |
-| wire VF | 0.992 | bare wire, includes end effect |
-| wire Rloss | 23 Ω | ground loss etc. at a current maximum |
-| wire radiation scale | 0.58 | low wire over ground radiates less than in free space |
-| counterpoise Z0 | 396 Ω | |
+| wire Z0 | 461 Ω | `0.775 × 60·ln(4h/d)` at h = 8 m, d = 1.6 mm |
+| wire VF | 0.991 | bare wire, includes end effect |
+| wire loss | 0.94 Ω/m at 10 MHz | ground loss etc. |
+| loss exponent p | 1.04 | wire and counterpoise; loss per metre rises about in proportion to f |
+| wire radiation scale | 0.61 | low wire over ground radiates less than in free space |
+| counterpoise Z0 | 402 Ω | |
 | counterpoise VF | 0.949 | |
-| counterpoise Rloss | 0.4 Ω | |
-| counterpoise radiation scale | 0.44 | |
+| counterpoise loss | 5.8 Ω/m at 10 MHz | 1.4 m above the ground |
+| counterpoise radiation scale | 0.01 | its radiation is lumped in with the loss |
+
+An earlier version used a fixed loss resistance at the current maximum,
+`αL = (k·Rrad + Rloss) / Z0` with Rloss = 23 Ω. That gave far too much feed resistance for
+wires shorter than about λ/4: a 7 m wire at 3.6 MHz came out at 94 − 1719j Ω against
+NEC's 7 − 1562j Ω (now 6 − 1739j Ω). Band scores on 80m and 40m were 7 to 8 points higher than
+NEC's, and the p90 SWR error was about 2.5×. A series loss per metre gives a short open
+line a small resistance (about a third of the line's total series loss), as NEC shows.
 
 ## NEC-2 setup (nec_sweep.py)
 
@@ -61,14 +70,18 @@ Sweeps in `data/` (columns f MHz, L m, R Ω, X Ω): `sweep_avg` (top 8 m, 5 m co
 ![Model vs NEC](img/model-vs-nec.png)
 
 Model (dashed) against NEC (solid): one set of constants for all six sweeps. Median SWR
-error is about 1.2× (p90 about 2.5×, mostly from small shifts near sharp resonances).
+error is 1.08× to 1.17× per sweep (p90 1.35× to 1.66×, mostly from small shifts near sharp
+resonances).
 
 ![Score validation](img/score-validation.png)
 
 Overall score from NEC impedances against the model's, VK bands 160m to 10m, 9:1, 5 m
-counterpoise, tuner limit 10:1: correlation 0.94, mean difference 3 points. Top lengths
-(NEC / model): 37.2 / 37.2 m, 42.9 / 42.4 m, 30.7 / 30.4 m, 18.4 / 18.6 m, 24.8 / 24.5 m,
-50.1 / 49.5 m.
+counterpoise, tuner limit 10:1: correlation 0.97, mean difference 1.5 points. Top lengths
+(NEC / model): 37.2 / 37.2 m, 42.9 / 42.4 m, 30.7 / 30.4 m, 18.4 / 18.4 m, 24.8 / 24.5 m,
+50.1 / 49.5 m, 57.8 / 55.8 m.
+
+Band scores (mean over 7 to 60 m), NEC / model: 160m 1 / 2, 80m 17 / 20, 40m 47 / 50,
+30m 66 / 66, 20m 75 / 75, 17m 80 / 80, 15m 81 / 81, 12m 73 / 72, 10m 55 / 57.
 
 ## Coax shield only (no counterpoise wire)
 
@@ -77,30 +90,26 @@ counterpoise, tuner limit 10:1: correlation 0.94, mean difference 3 points. Top 
 away from the wire. The radio end is open, or earthed with a short wire into the ground.
 Sweeps in `data/coax{5,10,20}_open*.csv` and `coax{10,20}_earthed.csv`.
 
-`fit_coax.py` fits `tlmodel.coax_stub`: a line with series loss per metre,
-`rp·(f/10 MHz)^p`, plus radiation as extra attenuation. The fixed loss resistance used for the
-wires gave too much feed resistance on 80m for coax lying on the ground.
+`fit_coax.py` fits the same line model (`tlmodel.stub`) with its own constants, holding the
+wire constants from `fit.json`.
 
 | Constant | Value |
 |---|---|
-| Z0 | 291 Ω |
-| VF | 0.966 |
-| series loss | 11.1 Ω/m at 10 MHz, × (f/10)^0.48 |
-| radiation scale | 0.51 |
+| Z0 | 301 Ω |
+| VF | 0.965 |
+| series loss | 12.9 Ω/m at 10 MHz, × (f/10)^0.44 |
+| radiation scale | 0.52 |
 
-- Median SWR error against NEC is about 1.2× (p90 1.4× to 1.8×).
+- Median SWR error against NEC is about 1.2× (p90 1.45× to 1.9×).
 - Score check with 10 m of coax (`validate_coax.py`, `img/score-validation-coax.png`, VK
-  bands 80m to 10m): correlation 0.91, mean difference 2.9 points. The model's 80m band score
-  is 14 points high (NEC 36, model 50); 40m and up are within 5 points.
+  bands 80m to 10m): correlation 0.89, mean difference 3.0 points. The model's 80m band score
+  is 5 points high (NEC 36, model 41); 40m and up are within 3 points.
 - 160m is not checked. With the coax this close to the ground, NEC-2 gives negative feed
   resistance at 1.85 MHz (it does not with the wire counterpoise at 1.4 m).
 - Earthing the radio end mainly changed 80m with 10 m of coax (median SWR 1.7×), and changed
   little with 20 m of coax or on 40m and up. The calculator assumes the open end.
 - With the same wire, NEC gives higher scores for coax lying on the ground than for a 5 m
   counterpoise at 1.4 m: the lossy ground damps the resonances.
-
-The 80m error comes mostly from the wire model: its fixed loss resistance also gives too much
-feed resistance for short wires on 80m with the 5 m counterpoise (model 7 points high).
 
 ## Not modelled
 
@@ -114,5 +123,7 @@ python3 -m venv venv && venv/bin/pip install PyNEC numpy scipy matplotlib
 venv/bin/python nec_sweep.py data/sweep_avg.csv avg 5 8
 venv/bin/python fit2.py        # refits, writes fit.json
 venv/bin/python overlay.py     # img/model-vs-nec.png
-venv/bin/python validate.py    # img/score-validation.png
+venv/bin/python validate.py    # img/score-validation.png, band scores
+venv/bin/python fit_coax.py    # after fit2.py: refits the coax shield, writes fit_coax.json
+venv/bin/python validate_coax.py  # img/score-validation-coax.png
 ```

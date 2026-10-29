@@ -1,7 +1,7 @@
 import numpy as np, csv
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
 from tlmodel import zin
-import json; _f=json.load(open('fit.json')); x=np.array([_f[k] for k in ['k0','vf','rl','rs','z0c','vfc','rlc','rsc']]); names=['k0','vf','rl','rs','z0c','vfc','rlc','rsc']
+import json; _f=json.load(open('fit.json')); x=np.array([_f[k] for k in ['k0','vf','rp','p','rs','z0c','vfc','rpc','rsc']]); names=['k0','vf','rp','p','rs','z0c','vfc','rpc','rsc']
 p=dict(zip(names,x)); p['z0']=p['k0']*60*np.log(4*8/0.0016); p['cp']=5
 d=np.array([list(map(float,r)) for r in csv.reader(open('data/bands_cp5.csv'))])
 def swr(Z,n=9):
@@ -33,3 +33,11 @@ def peaks(s):
 print('NEC top  ',[(round(Ls[k],1),round(sn[k])) for k in peaks(sn)])
 print('model top',[(round(Ls[k],1),round(sm[k])) for k in peaks(sm)])
 plt.figure(figsize=(12,4)); plt.semilogx(Ls,sn,label='NEC-2'); plt.semilogx(Ls,sm,'--',label='model'); plt.legend(); plt.xlabel('wire length m'); plt.ylabel('score'); plt.title('Overall score, VK bands 160-10m, 9:1, 5 m counterpoise, tuner 10:1'); plt.tight_layout(); plt.savefig('img/score-validation.png',dpi=70)
+
+for b in bands:
+    dn=[]; dm=[]
+    for L in Ls:
+        for f in b:
+            r=d[(d[:,0]==f)&(d[:,1]==L)][0]
+            dn.append(mark(swr(r[2]+1j*r[3]))); dm.append(mark(swr(zin(np.array([L]),np.array([f]),p)[0])))
+    print('band from %g MHz: NEC %.0f, model %.0f'%(b[0],100*np.mean(dn),100*np.mean(dm)))

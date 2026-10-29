@@ -1,11 +1,11 @@
-"""Fit the coax-shield counterpoise (tlmodel.coax_stub), holding the wire constants from
+"""Fit the coax-shield counterpoise (tlmodel.stub with its own constants), holding the wire constants from
 fit.json. Uses the coax*_open sweeps (radio end not earthed). Writes fit_coax.json.
 
 160m is left out: with the coax this close to the ground, NEC-2 gives negative feed
 resistance at 1.85 MHz (the wire counterpoise at 1.4 m is fine)."""
 import csv, json, numpy as np
 from scipy.optimize import least_squares
-from tlmodel import stub, coax_stub
+from tlmodel import stub
 
 W = json.load(open('fit.json'))
 z0w = W['k0'] * 60 * np.log(4 * 8 / 0.0016)
@@ -18,7 +18,7 @@ for n in (5, 10, 20):
         data.append((fn, n, d[d[:, 0] > 2.5]))
 
 def model(x, n, L, f):
-    return stub(L, f, z0w, W['vf'], W['rl'], W['rs']) + coax_stub(n, f, *x)
+    return stub(L, f, z0w, W['vf'], W['rp'], W['p'], W['rs']) + stub(n, f, *x)
 
 def res(x):
     out = []

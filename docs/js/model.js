@@ -1,37 +1,38 @@
 // Feedpoint impedance model for an end-fed random wire, and the scoring built on it.
 //
 // The wire and the counterpoise are each treated as a lossy open-ended transmission line
-// (Zin = Z0·coth(γL)), connected in series at the feedpoint. The loss per line is set so the
-// input resistance at a current maximum equals radiation resistance + a fixed loss resistance,
-// using the textbook sinusoidal-current radiation resistance. Constants are fitted to NEC-2
-// sweeps of a sloping end-fed wire over average ground: see model/README.md.
+// (Zin = Z0·coth(γL)), connected in series at the feedpoint. Each line has a series loss in
+// ohms per metre, plus radiation as extra attenuation, using the textbook sinusoidal-current
+// radiation resistance. Constants are fitted to NEC-2 sweeps of a sloping end-fed wire over
+// average ground: see model/README.md.
 // No DOM access here, so this module can be tested under node.
 
 const C_MPS = 299792458;
 const EULER = 0.5772156649015329;
 
 // Fitted against NEC-2 (model/fit.json). Wire height (4, 8, 12 m) changed Z0 by under 6%,
-// so one value is used.
+// so one value is used. Loss is in series ohms per metre at 10 MHz, scaled by
+// (f / 10 MHz) to the power lossExp.
 export const MODEL = {
-    wireZ0: 462,
-    wireVf: 0.992,          // bare wire; the user's velocity factor replaces this
-    wireLossOhms: 23.1,     // ground and other losses, referred to a current maximum
-    wireRadScale: 0.579,    // low wire over ground radiates less than in free space
-    cpZ0: 396,
-    cpVfRatio: 0.949 / 0.992, // counterpoise runs slower than the wire (closer to ground)
-    cpLossOhms: 0.36,
-    cpRadScale: 0.438,
+    wireZ0: 461,
+    wireVf: 0.991,          // bare wire; the user's velocity factor replaces this
+    wireLossPerM: 0.942,    // ground and other losses
+    wireRadScale: 0.609,    // low wire over ground radiates less than in free space
+    lossExp: 1.036,         // shared by the wire and the counterpoise wire
+    cpZ0: 402,
+    cpVfRatio: 0.9485 / 0.9907, // counterpoise runs slower than the wire (closer to ground)
+    cpLossPerM: 5.85,       // the counterpoise is 1.4 m up, so ground loss is higher
+    cpRadScale: 0.013,      // its radiation is lumped in with the loss
     radialsOhms: 15,        // "ground radials": treated as a plain resistance
     // Coax shield as the counterpoise (no counterpoise wire). Fitted to NEC-2 runs of 5, 10
     // and 20 m of coax dropping from the feedpoint and lying along the ground, open at the
-    // radio end (model/fit_coax.json). Lying on lossy ground, it fits a line with series loss
-    // per metre better than the fixed loss resistance used for the wires. The user's VF is for
-    // the antenna wire, so it doesn't apply here.
-    coaxZ0: 291,
-    coaxVf: 0.966,
-    coaxLossPerM: 11.13,    // series ohms per metre at 10 MHz
-    coaxLossExp: 0.481,     // ... scaled by (f / 10 MHz) to this power
-    coaxRadScale: 0.512,
+    // radio end (model/fit_coax.json). The user's VF is for the antenna wire, so it doesn't
+    // apply here.
+    coaxZ0: 301,
+    coaxVf: 0.965,
+    coaxLossPerM: 12.90,
+    coaxLossExp: 0.439,
+    coaxRadScale: 0.522,
 };
 
 // Sine and cosine integrals, Numerical Recipes "cisi".
@@ -117,28 +118,18 @@ function growRrTable(minLen) {
     rrTable = t;
 }
 
-// Input impedance [R, X] of an open-ended lossy line representing a radiating wire.
-export function wireImpedance(lengthM, freqMHz, vf, z0, lossOhms, radScale) {
-    const k = 2 * Math.PI * freqMHz * 1e6 / C_MPS;
-    const bl = (k / vf) * lengthM;
-    const al = (radScale * monopoleRadiationResistance(k * lengthM) + lossOhms) / z0;
-    // coth(x + iy) = (sinh 2x − i sin 2y) / (cosh 2x − cos 2y)
-    const den = Math.cosh(2 * al) - Math.cos(2 * bl);
-    return [z0 * Math.sinh(2 * al) / den, -z0 * Math.sin(2 * bl) / den];
-}
-
-// Input impedance [R, X] of the coax shield lying along the ground, open at the radio end.
-// Same as model/tlmodel.py coax_stub.
-export function coaxShieldImpedance(lengthM, freqMHz) {
-    const { coaxZ0: z0, coaxVf: vf } = MODEL;
+// Input impedance [R, X] of an open-ended line representing a radiating wire or coax shield,
+// with series loss lossPerM·(f / 10 MHz)^lossExp ohms per metre, plus radiation as extra
+// attenuation. Same as model/tlmodel.py stub.
+export function lineImpedance(lengthM, freqMHz, vf, z0, lossPerM, lossExp, radScale) {
     const w = 2 * Math.PI * freqMHz * 1e6;
     const xs = w * z0 / (vf * C_MPS);            // series reactance per metre
     const b = w / (z0 * vf * C_MPS);             // shunt susceptance per metre
-    const rs = MODEL.coaxLossPerM * (freqMHz / 10) ** MODEL.coaxLossExp;
+    const rs = lossPerM * (freqMHz / 10) ** lossExp;
     const k = w / C_MPS;
     // γ = sqrt((rs + j·xs)(j·b)) plus radiation, and Zc = sqrt((rs + j·xs) / (j·b))
     const [gRe0, gIm] = csqrt(-xs * b, rs * b);
-    const gRe = gRe0 + MODEL.coaxRadScale * monopoleRadiationResistance(k * lengthM) / z0 / lengthM;
+    const gRe = gRe0 + radScale * monopoleRadiationResistance(k * lengthM) / z0 / lengthM;
     const [zcRe, zcIm] = csqrt(xs / b, -rs / b);
     const al = gRe * lengthM, bl = gIm * lengthM;
     // coth(x + iy) = (sinh 2x − i sin 2y) / (cosh 2x − cos 2y)
@@ -157,14 +148,16 @@ function csqrt(re, im) {
 // setup: { vf, counterpoise: { kind: 'wire' | 'coax', lengthM } | { kind: 'radials' } }
 export function counterpoiseImpedance(freqMHz, setup) {
     const cp = setup.counterpoise;
-    if (cp && cp.kind === 'coax' && cp.lengthM > 0) return coaxShieldImpedance(cp.lengthM, freqMHz);
+    if (cp && cp.kind === 'coax' && cp.lengthM > 0) {
+        return lineImpedance(cp.lengthM, freqMHz, MODEL.coaxVf, MODEL.coaxZ0, MODEL.coaxLossPerM, MODEL.coaxLossExp, MODEL.coaxRadScale);
+    }
     if (!cp || cp.kind === 'radials' || !(cp.lengthM > 0)) return [MODEL.radialsOhms, 0];
     const vf = setup.vf * MODEL.cpVfRatio;
-    return wireImpedance(cp.lengthM, freqMHz, vf, MODEL.cpZ0, MODEL.cpLossOhms, MODEL.cpRadScale);
+    return lineImpedance(cp.lengthM, freqMHz, vf, MODEL.cpZ0, MODEL.cpLossPerM, MODEL.lossExp, MODEL.cpRadScale);
 }
 
 export function feedImpedance(lengthM, freqMHz, setup, cpZ = counterpoiseImpedance(freqMHz, setup)) {
-    const w = wireImpedance(lengthM, freqMHz, setup.vf, MODEL.wireZ0, MODEL.wireLossOhms, MODEL.wireRadScale);
+    const w = lineImpedance(lengthM, freqMHz, setup.vf, MODEL.wireZ0, MODEL.wireLossPerM, MODEL.lossExp, MODEL.wireRadScale);
     return [w[0] + cpZ[0], w[1] + cpZ[1]];
 }
 

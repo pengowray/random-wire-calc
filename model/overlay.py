@@ -2,7 +2,7 @@ import csv,sys,numpy as np
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
 from tlmodel import *
 exec(open('fit2.py').read().split('r=least_squares')[0])
-import json; _f=json.load(open('fit.json')); x=np.array([_f[k] for k in ['k0','vf','rl','rs','z0c','vfc','rlc','rsc']])
+import json; _f=json.load(open('fit.json')); x=np.array([_f[k] for k in ['k0','vf','rp','p','rs','z0c','vfc','rpc','rsc']])
 def swr(Z,n=9):
     zt=Z/n; g=abs((zt-50)/(zt+50)); return (1+g)/(1-g)
 fig,axs=plt.subplots(6,2,figsize=(16,20))

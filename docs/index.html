@@ -192,7 +192,7 @@
     <p>Suggested lengths are the best-scoring lengths in the length range. A length within the minimum spacing of a higher-scoring suggestion is left out, so near-identical lengths are listed once.</p>
 
     <h2>Model accuracy and limits</h2>
-    <p>SWR figures are typically within 15 to 20% of NEC-2 simulations, but close to sharp resonances the error can be 2 to 3 times larger. The lengths where the SWR peaks and dips line up closely with the NEC results. The results have not been compared with real-world measurements.</p>
+    <p>SWR figures are typically within 10 to 15% of NEC-2 simulations. In 9 out of 10 cases the SWR is within a factor of 1.7 of NEC's, and the larger errors are close to sharp resonances. With a 5 m counterpoise, the average score on each band from 160m to 10m is within 3 points of the score from NEC. The lengths where the SWR peaks and dips line up closely with the NEC results. The results have not been compared with real-world measurements.</p>
     <p><b>Not modelled:</b></p>
     <ul>
         <li>coax loss</li>
@@ -203,8 +203,8 @@
         <li>variations in real ground</li>
     </ul>
     <p>Ground radials are modelled as a plain 15 Ω resistance. That setting was not simulated in NEC.</p>
-    <p>Coax shield only is fitted to NEC-2 simulations with 5 m, 10 m and 20 m of coax. In those simulations the coax drops 1.4 m from the feedpoint to the ground, then lies along the ground, and the radio end is not earthed (for example, a battery-powered radio). The median SWR error against NEC is about 1.2×, the same as for the rest of the model. With 10 m of coax, 80m band scores came out about 14 points higher than NEC's, and 160m could not be checked: NEC-2 gives unreliable results for wires this close to the ground at 1.8 MHz. Earthing the radio end, for example through mains earth, mainly changed the results on 80m. Real coax routes vary (hanging in the air, coiled, or with other cables attached), so results with Coax shield only are less certain than with a counterpoise wire.</p>
-    <p><b>Method:</b> the wire and the counterpoise are treated as two lossy open-ended transmission lines in series, a standard approximation. Radiation resistance comes from the textbook formula for a sinusoidal current distribution. The constants were fitted to NEC-2 simulations (PyNEC) of a sloping end-fed wire over average ground: feedpoint 1.5 m up, wire rising to 4, 8 or 12 m and then running level, counterpoise 2.5, 5 or 10 m.</p>
+    <p>Coax shield only is fitted to NEC-2 simulations with 5 m, 10 m and 20 m of coax. In those simulations the coax drops 1.4 m from the feedpoint to the ground, then lies along the ground, and the radio end is not earthed (for example, a battery-powered radio). The median SWR error against NEC is about 1.2×. With 10 m of coax, 80m band scores came out about 5 points higher than NEC's, and 160m could not be checked: NEC-2 gives unreliable results for wires this close to the ground at 1.8 MHz. Earthing the radio end, for example through mains earth, mainly changed the results on 80m. Real coax routes vary (hanging in the air, coiled, or with other cables attached), so results with Coax shield only are less certain than with a counterpoise wire.</p>
+    <p><b>Method:</b> the wire and the counterpoise are treated as two lossy open-ended transmission lines in series, a standard approximation. Each line has a loss in ohms per metre that rises with frequency. Radiation resistance comes from the textbook formula for a sinusoidal current distribution. The constants were fitted to NEC-2 simulations (PyNEC) of a sloping end-fed wire over average ground: feedpoint 1.5 m up, wire rising to 4, 8 or 12 m and then running level, counterpoise 2.5, 5 or 10 m.</p>
     <p><b>What the simulations showed:</b></p>
     <ul>
         <li>Wire height made little difference.</li>
