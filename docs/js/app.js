@@ -1,6 +1,6 @@
 import { BAND_ORDER, REGIONS, guessRegion, formatSegments } from './bands.js';
 import { PRESETS, presetLengthsFeet } from './presets.js';
-import { parseLength, formatFeetInches, METRES_PER_FOOT, trim } from './units.js';
+import { parseLength, formatFeetInches, formatBoth, METRES_PER_FOOT, trim } from './units.js';
 import {
     makeContext, sweep, sweepLengths, pickSuggestions, evaluateLength, percentileOf, counterpoiseWarnings,
 } from './model.js';
@@ -33,6 +33,7 @@ function init() {
     document.querySelectorAll('.settings input, .settings select, #compare').forEach(el => {
         el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
             if (el.id === 'region') buildBandList();
+            if (el.id === 'units') convertPlainLengths(el.value);
             update();
         });
     });
@@ -76,6 +77,18 @@ function buildBandList() {
     });
 }
 
+// When the length unit changes, rewrite plain numbers in the length fields so they keep
+// the same length ("7" metres becomes "23" feet). Values with a unit typed are left alone.
+function convertPlainLengths(units) {
+    for (const id of ['minLen', 'maxLen', 'cpLen', 'checkLen']) {
+        const el = $(id);
+        const v = el.value.trim();
+        if (!/^\d*\.?\d+$/.test(v)) continue;
+        const n = parseFloat(v);
+        el.value = units === 'ft' ? trim(n / METRES_PER_FOOT, 2) : trim(n * METRES_PER_FOOT, 2);
+    }
+}
+
 function selectedBandNames() {
     return Array.from($('bandList').querySelectorAll('input:checked')).map(cb => cb.value);
 }
@@ -83,7 +96,9 @@ function selectedBandNames() {
 function readSettings() {
     const region = REGIONS[$('region').value];
     const bands = selectedBandNames().filter(b => region.bands[b]).map(b => ({ name: b, segments: region.bands[b] }));
-    const minP = parseLength($('minLen').value), maxP = parseLength($('maxLen').value);
+    const units = $('units').value;
+    document.querySelectorAll('.len-unit').forEach(el => { el.textContent = units; });
+    const minP = parseLength($('minLen').value, units), maxP = parseLength($('maxLen').value, units);
     setInvalid($('minLen'), !minP || !(minP.metres > 0));
     setInvalid($('maxLen'), !maxP || !(maxP.metres > 0));
     let min = minP && minP.metres > 0 ? minP.metres : 7;
@@ -103,7 +118,7 @@ function readSettings() {
     const cpKind = $('cpKind').value;
     $('cpLen').classList.toggle('hidden', cpKind !== 'wire');
     $('cpUnit').classList.toggle('hidden', cpKind !== 'wire');
-    const cpP = parseLength($('cpLen').value);
+    const cpP = parseLength($('cpLen').value, units);
     setInvalid($('cpLen'), cpKind === 'wire' && !(cpP && cpP.metres > 0));
     const counterpoise = cpKind === 'wire' && cpP && cpP.metres > 0
         ? { kind: 'wire', lengthM: cpP.metres, isFeet: cpP.isFeet } : { kind: 'radials' };
@@ -165,7 +180,7 @@ function update() {
 function readCheck() {
     const raw = $('checkLen').value;
     if (!raw.trim()) { setInvalid($('checkLen'), false); return { metres: null, raw }; }
-    const p = parseLength(raw);
+    const p = parseLength(raw, $('units').value);
     const ok = p && p.metres > 0.5 && p.metres < 2000;
     setInvalid($('checkLen'), !ok);
     return ok ? { metres: p.metres, isFeet: p.isFeet, raw } : { metres: null, raw, error: notALength(raw) };
@@ -177,7 +192,7 @@ function renderCheck() {
     if (check.error) { out.innerHTML = `<span class="error">${esc(check.error)}</span>`; return; }
     if (!checked) { out.textContent = ''; return; }
     const ok = checked.bands.filter(b => b.inRange >= 1).length;
-    const head = `${fmtM(checked.lengthM)} (${formatFeetInches(checked.lengthM)}): score ${checked.score.toFixed(0)}`;
+    const head = `${formatBoth(checked.lengthM, s.units)}: score ${checked.score.toFixed(0)}`;
     const bandsTxt = `${ok} of ${checked.bands.length} bands in tuner range.`;
     if (checked.lengthM < s.min || checked.lengthM > s.max) {
         out.textContent = `${head}, ${bandsTxt} Outside the length range (${fmtLen(s.min)} to ${fmtLen(s.max)}), so not compared with other lengths.`;
@@ -189,7 +204,7 @@ function renderCheck() {
     const near = nearestSuggestion(checked.lengthM, suggestions);
     const isSuggestion = near && Math.abs(near.lengthM / checked.lengthM - 1) < 0.001;
     const nearTxt = !near ? '' : isSuggestion ? ` Suggestion #${near.rank}.`
-        : ` Nearest suggestion: #${near.rank}, ${fmtM(near.lengthM)}, score ${near.score.toFixed(0)}.`;
+        : ` Nearest suggestion: #${near.rank}, ${fmtLen(near.lengthM)}, score ${near.score.toFixed(0)}.`;
     out.textContent = `${head}, ${rank}. ${bandsTxt}${nearTxt}`;
 }
 
@@ -205,12 +220,12 @@ function renderChart() {
     const { s, sw, suggestions, presets, checked, ctx } = last;
     const top = suggestions[0];
     $('chartSummary').textContent = top
-        ? `Best score between ${fmtLen(s.min)} and ${fmtLen(s.max)}: ${top.score.toFixed(0)} at ${fmtM(top.lengthM)} (${formatFeetInches(top.lengthM)}). Lower panel: each band's score; blue is inside your tuner's limit, red is beyond it.`
+        ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}. Lower panel: each band's score; blue is inside your tuner's limit, red is beyond it.`
         : '';
     drawChart($('plot'), {
         sw, bands: ctx.bands.map(b => b.name), suggestions, presets, checked,
         presetName: s.compare ? PRESETS[s.compare].name : '', range: { min: s.min, max: s.max },
-    }, { units: s.units, log: s.log }, m => { $('checkLen').value = trim(m, 2); update(); });
+    }, { units: s.units, log: s.log }, m => { $('checkLen').value = toInput(m); update(); });
 }
 
 function renderSuggestions() {
@@ -218,8 +233,10 @@ function renderSuggestions() {
     const { s, suggestions, details, checked, hopeless } = last;
     $('suggestionsTitle').textContent = `Suggested lengths (${suggestions.length})`;
     const hopelessTxt = hopelessNote(hopeless);
+    const fewer = suggestions.length && suggestions.length < s.count
+        ? ` Only ${suggestions.length} of the ${s.count} requested: the score curve has no other clear peaks at least ${trim(s.spacing * 100, 1)}% from these.` : '';
     $('suggestionsNote').textContent = suggestions.length
-        ? `Between ${fmtLen(s.min)} and ${fmtLen(s.max)}, at least ${trim(s.spacing * 100, 1)}% apart. Click a row to see it band by band.${hopelessTxt}`
+        ? `Between ${fmtLen(s.min)} and ${fmtLen(s.max)}, at least ${trim(s.spacing * 100, 1)}% apart.${fewer} Click a row to see it band by band.${hopelessTxt}`
         : '';
     document.querySelectorAll('#suggestions th[data-sort]').forEach(th => {
         th.setAttribute('aria-sort', th.dataset.sort === sortKey ? (sortDir > 0 ? 'ascending' : 'descending') : 'none');
@@ -247,7 +264,7 @@ function renderSuggestions() {
             <td class="num">${scoreCell(g.score)}</td>
             <td class="num">${ok} of ${d.bands.length}</td>
             <td>${worst ? `${worst.name} (SWR up to ${fmtSwr(worst.swrMax)})` : ''}</td>`;
-        tr.addEventListener('click', () => { $('checkLen').value = trim(g.lengthM, 2); update(); });
+        tr.addEventListener('click', () => { $('checkLen').value = toInput(g.lengthM); update(); });
         tbody.appendChild(tr);
     }
 }
@@ -277,8 +294,8 @@ function renderCompare() {
             <td class="num">${scoreCell(x.score)}</td>
             <td class="num">${ok} of ${x.bands.length}</td>
             <td>${worst ? `${worst.name} (SWR up to ${fmtSwr(worst.swrMax)})` : ''}</td>
-            <td>${outside ? '<span class="muted">outside the length range</span>' : near ? `#${near.rank}, ${fmtM(near.lengthM)}, score ${near.score.toFixed(0)}` : ''}</td>`;
-        tr.addEventListener('click', () => { $('checkLen').value = trim(x.lengthM, 2); update(); });
+            <td>${outside ? '<span class="muted">outside the length range</span>' : near ? `#${near.rank}, ${fmtLen(near.lengthM)}, score ${near.score.toFixed(0)}` : ''}</td>`;
+        tr.addEventListener('click', () => { $('checkLen').value = toInput(x.lengthM); update(); });
         tbody.appendChild(tr);
     }
 }
@@ -289,8 +306,8 @@ function renderBands() {
     const ev = checked || (suggestions[0] && details.get(1));
     if (!ev) { emptyTable('bandTable', 7, 'Enter a length in "Check a length" to see it band by band.'); return; }
     $('bandTitle').textContent = checked
-        ? `Band by band: ${fmtM(ev.lengthM)}`
-        : `Band by band: ${fmtM(ev.lengthM)} (suggestion 1)`;
+        ? `Band by band: ${formatBoth(ev.lengthM, s.units)}, the checked length`
+        : `Band by band: ${formatBoth(ev.lengthM, s.units)}, suggestion 1`;
     const warnings = counterpoiseWarnings(ctx);
     const cp = s.setup.counterpoise;
     const tbody = $('bandTable').querySelector('tbody');
@@ -301,13 +318,13 @@ function renderBands() {
         if (warnings.has(b.name)) {
             notes.push(`Counterpoise near a half-wave multiple on ${b.name}: a ${fmtCp(cp)} counterpoise raises the SWR on ${b.name} at every wire length.`);
         }
-        if (b.inRange < 1) notes.push(`Highest SWR at ${trim(b.worstFreq, 3)} MHz.`);
+        if (b.inRange < 1) notes.push(`Highest SWR ${fmtSwr(b.swrMax)} at ${trim(b.worstFreq, 3)} MHz.`);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${b.name}</td>
             <td>${formatSegments(b.segments)}</td>
             <td class="num">${scoreCell(b.score)}</td>
-            <td class="num">${b.swrMin.toFixed(1)} to ${fmtSwr(b.swrMax)}</td>
+            <td class="num">${fmtSwr(b.swrMin)} to ${fmtSwr(b.swrMax)}</td>
             <td class="num">${fmtOhms(b.zMin)} to ${fmtOhms(b.zMax)}</td>
             <td class="num">${share}</td>
             <td class="note">${notes.join(' ')}</td>`;
@@ -321,9 +338,10 @@ function hopelessNote(hopeless) {
     return ` ${listBands(hopeless)} ${one ? 'is' : 'are'} beyond your tuner's limit at every length in the length range, so the Worst band column leaves ${one ? 'it' : 'them'} out.`;
 }
 
+// The band with the highest SWR, so it agrees with the "Bands in tuner range" count.
 function worstBand(bands, skip) {
     const pool = bands.filter(b => !skip.has(b.name));
-    return (pool.length ? pool : bands).reduce((w, b) => (!w || b.score < w.score ? b : w), null);
+    return (pool.length ? pool : bands).reduce((w, b) => (!w || b.swrMax > w.swrMax ? b : w), null);
 }
 
 function listBands(set) {
@@ -342,6 +360,7 @@ function emptyTable(id, cols, text) {
 
 // ---- formatting
 
+function toInput(m) { return $('units').value === 'ft' ? trim(m / METRES_PER_FOOT, 2) : trim(m, 2); }
 function fmtM(m) { return `${m.toFixed(2)} m`; }
 function fmtLen(m) {
     return $('units').value === 'ft' ? `${Math.round(m / METRES_PER_FOOT)} ft` : `${trim(m, 2)} m`;
@@ -426,7 +445,7 @@ function applyHash() {
     const wire = p.get('wire');
     const vf = p.get('vf');
     if (wire && ['0.99', '0.96', '0.93', 'custom'].includes(wire)) c.wire = wire;
-    else if (wire && parseLength(wire)) c.check = wire; // old links: wire=<one length>
+    else if (wire && parseLength(wire)) c.check = wire.endsWith('ft') ? wire : `${wire.replace(/m$/, '')} m`; // old links: wire=<one length>
     if (vf) { c.wire = 'custom'; c.vf = vf; }
     if (['1', '4', '9', '49', '64'].includes(p.get('match'))) c.matching = p.get('match');
     if (['2', '3', '10'].includes(p.get('tuner'))) c.tuner = p.get('tuner');

@@ -1,14 +1,15 @@
 export const METRES_PER_FOOT = 0.3048;
 
-// Accepts "21.5", "21.5 m", "70ft", "70'", "70 ft 6 in", "70' 6\"".
-// Returns { metres, isFeet } or null if no number was found.
-export function parseLength(raw) {
+// Accepts "21.5", "21.5 m", "70ft", "70'", "70 ft 6 in", "70' 6\"". A plain number is in
+// `defaultUnit` ('m' or 'ft'). Returns { metres, isFeet } or null if no number was found.
+export function parseLength(raw, defaultUnit = 'm') {
     if (typeof raw !== 'string') return null;
     const s = raw.trim().toLowerCase();
     if (!s) return null;
     const numbers = s.match(/\d*\.?\d+/g);
     if (!numbers) return null;
-    const isFeet = /(ft\.?\b|feet\b|foot\b|['’′])/.test(s);
+    const saysMetres = /(\d\s*m\b|metre|meter)/.test(s);
+    const isFeet = /(ft\.?\b|feet\b|foot\b|['’′])/.test(s) || (defaultUnit === 'ft' && !saysMetres);
     if (isFeet) {
         const hasInches = /("|”|″|in\b|inch)/.test(s);
         const inches = hasInches && numbers.length > 1 ? parseFloat(numbers[1]) : 0;
@@ -36,4 +37,11 @@ export function formatMetres(metres, digits = 2) {
 
 export function trim(value, digits) {
     return String(Number(value.toFixed(digits)));
+}
+
+// "35.10 m (115 ft 2 in)", or feet first when the user works in feet.
+export function formatBoth(metres, units) {
+    return units === 'ft'
+        ? `${formatFeetInches(metres)} (${metres.toFixed(2)} m)`
+        : `${metres.toFixed(2)} m (${formatFeetInches(metres)})`;
 }

@@ -50,6 +50,17 @@ export function drawChart(el, data, opts, onPick) {
         hovertemplate: `Suggestion %{text}: %{x:.2f} ${unit} (%{customdata[0]})<br>Score %{y:.0f}<br>Cut between %{customdata[1]:.2f} and %{customdata[2]:.2f} ${unit}<extra></extra>`,
         xaxis: 'x', yaxis: 'y', cliponaxis: false,
     });
+    // Legend entries for the shaded cut ranges and the checked-length line, which are shapes.
+    traces.push({
+        x: [null], y: [null], type: 'scatter', mode: 'markers', name: 'Cut between range',
+        marker: { symbol: 'square', size: 12, color: accent, opacity: 0.25 }, hoverinfo: 'skip', xaxis: 'x', yaxis: 'y',
+    });
+    if (checked) {
+        traces.push({
+            x: [null], y: [null], type: 'scatter', mode: 'lines', name: 'Checked length',
+            line: { color: ink, width: 1.5, dash: 'dash' }, hoverinfo: 'skip', xaxis: 'x', yaxis: 'y',
+        });
+    }
     if (presets && presets.length) {
         traces.push({
             x: presets.map(p => toX(p.lengthM)), y: presets.map(p => p.score),
