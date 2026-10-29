@@ -33,13 +33,24 @@ export function drawChart(el, data, opts, onPick) {
     const ft = Array.from(sw.lengths, formatFeetInches);
 
     const traces = [];
+    const scoreName = data.scoreName || 'Score';
     traces.push({
         x: xs, y: Array.from(sw.scores), customdata: ft,
-        type: 'scatter', mode: 'lines', name: 'Score',
+        type: 'scatter', mode: 'lines', name: scoreName,
         line: { color: accent, width: 2 },
-        hovertemplate: `%{x:.2f} ${unit} (%{customdata})<br>Score %{y:.0f}<extra></extra>`,
+        hovertemplate: `%{x:.2f} ${unit} (%{customdata})<br>${scoreName} %{y:.0f}<extra></extra>`,
         xaxis: 'x', yaxis: 'y',
     });
+    // Second score line: the same settings with another counterpoise ("Compare with").
+    if (data.alt) {
+        traces.push({
+            x: xs, y: Array.from(data.alt.scores), customdata: ft,
+            type: 'scatter', mode: 'lines', name: data.alt.name,
+            line: { color: compare, width: 2, dash: 'dot' },
+            hovertemplate: `%{x:.2f} ${unit} (%{customdata})<br>${data.alt.name} %{y:.0f}<extra></extra>`,
+            xaxis: 'x', yaxis: 'y',
+        });
+    }
     traces.push({
         x: suggestions.map(s => toX(s.lengthM)), y: suggestions.map(s => s.score),
         text: suggestions.map(s => String(s.rank)),

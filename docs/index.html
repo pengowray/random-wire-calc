@@ -68,13 +68,21 @@
         </label>
 
         <label>Counterpoise
-            <span class="range-inputs">
-                <select id="cpKind" title="Counterpoise wire length, or ground radials. A counterpoise close to half a wavelength on a band raises the SWR on that band.">
+            <span class="range-inputs wraps">
+                <select id="cpKind" title="Counterpoise wire length, ground radials, or coax shield only. With Coax shield only there is no counterpoise wire: the outside of the coax shield acts as the counterpoise, so the coax length changes the results. A counterpoise wire close to half a wavelength on a band raises the SWR on that band.">
                     <option value="wire">Counterpoise wire</option>
                     <option value="radials">Ground radials</option>
+                    <option value="coax">Coax shield only</option>
                 </select>
-                <input type="text" id="cpLen" inputmode="decimal" value="5" aria-label="Counterpoise length" class="short">
-                <span class="unit len-unit" id="cpUnit">m</span>
+                <span class="input-unit" id="cpGroup">
+                    <input type="text" id="cpLen" inputmode="decimal" value="5" aria-label="Counterpoise length" class="short">
+                    <span class="unit len-unit">m</span>
+                </span>
+                <span class="input-unit hidden" id="coaxGroup">
+                    <input type="text" id="coaxLen" inputmode="decimal" value="10" aria-label="Coax length from the unun to the radio" class="short"
+                        title="Coax length from the unun to the radio. The model assumes the coax drops 1.4 m (4 ft 7 in) from the feedpoint to the ground, then lies along the ground, and the radio end is not earthed.">
+                    <span class="unit"><span class="len-unit">m</span> of coax</span>
+                </span>
             </span>
         </label>
     </div>
@@ -125,6 +133,7 @@
             <th class="num">Length (ft in)</th>
             <th class="num" title="Any length in this range has a score within 3 points of the suggested length's score.">Cut between</th>
             <th data-sort="score" class="num" title="Average of the band scores, from 0 to 100. A score of 50 means the SWR is about at your tuner's limit. Higher is better.">Score</th>
+            <th class="num hidden" id="altScoreHead"></th>
             <th class="num" title="Number of selected bands where the SWR stays within the tuner's limit across the whole band.">Bands in tuner range</th>
             <th>Worst band</th>
         </tr></thead>
@@ -187,13 +196,14 @@
     <p><b>Not modelled:</b></p>
     <ul>
         <li>coax loss</li>
-        <li>common-mode current on the coax (the coax shield acting as part of the counterpoise)</li>
+        <li>common-mode current on the coax with a counterpoise wire or ground radials (the model assumes a choke at the feedpoint)</li>
         <li>unun losses</li>
         <li>nearby objects</li>
         <li>bends, and wire shapes other than the simulated one</li>
         <li>variations in real ground</li>
     </ul>
     <p>Ground radials are modelled as a plain 15 Ω resistance. That setting was not simulated in NEC.</p>
+    <p>Coax shield only is fitted to NEC-2 simulations with 5 m, 10 m and 20 m of coax. In those simulations the coax drops 1.4 m from the feedpoint to the ground, then lies along the ground, and the radio end is not earthed (for example, a battery-powered radio). The median SWR error against NEC is about 1.2×, the same as for the rest of the model. With 10 m of coax, 80m band scores came out about 14 points higher than NEC's, and 160m could not be checked: NEC-2 gives unreliable results for wires this close to the ground at 1.8 MHz. Earthing the radio end, for example through mains earth, mainly changed the results on 80m. Real coax routes vary (hanging in the air, coiled, or with other cables attached), so results with Coax shield only are less certain than with a counterpoise wire.</p>
     <p><b>Method:</b> the wire and the counterpoise are treated as two lossy open-ended transmission lines in series, a standard approximation. Radiation resistance comes from the textbook formula for a sinusoidal current distribution. The constants were fitted to NEC-2 simulations (PyNEC) of a sloping end-fed wire over average ground: feedpoint 1.5 m up, wire rising to 4, 8 or 12 m and then running level, counterpoise 2.5, 5 or 10 m.</p>
     <p><b>What the simulations showed:</b></p>
     <ul>

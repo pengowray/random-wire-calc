@@ -70,9 +70,41 @@ counterpoise, tuner limit 10:1: correlation 0.94, mean difference 3 points. Top 
 (NEC / model): 37.2 / 37.2 m, 42.9 / 42.4 m, 30.7 / 30.4 m, 18.4 / 18.6 m, 24.8 / 24.5 m,
 50.1 / 49.5 m.
 
+## Coax shield only (no counterpoise wire)
+
+`nec_coax.py`: the same wire, with the coax shield as the only counterpoise. The coax
+(radius 2.5 mm) drops from the feedpoint to 5 cm above the ground, then runs along the ground
+away from the wire. The radio end is open, or earthed with a short wire into the ground.
+Sweeps in `data/coax{5,10,20}_open*.csv` and `coax{10,20}_earthed.csv`.
+
+`fit_coax.py` fits `tlmodel.coax_stub`: a line with series loss per metre,
+`rp·(f/10 MHz)^p`, plus radiation as extra attenuation. The fixed loss resistance used for the
+wires gave too much feed resistance on 80m for coax lying on the ground.
+
+| Constant | Value |
+|---|---|
+| Z0 | 291 Ω |
+| VF | 0.966 |
+| series loss | 11.1 Ω/m at 10 MHz, × (f/10)^0.48 |
+| radiation scale | 0.51 |
+
+- Median SWR error against NEC is about 1.2× (p90 1.4× to 1.8×).
+- Score check with 10 m of coax (`validate_coax.py`, `img/score-validation-coax.png`, VK
+  bands 80m to 10m): correlation 0.91, mean difference 2.9 points. The model's 80m band score
+  is 14 points high (NEC 36, model 50); 40m and up are within 5 points.
+- 160m is not checked. With the coax this close to the ground, NEC-2 gives negative feed
+  resistance at 1.85 MHz (it does not with the wire counterpoise at 1.4 m).
+- Earthing the radio end mainly changed 80m with 10 m of coax (median SWR 1.7×), and changed
+  little with 20 m of coax or on 40m and up. The calculator assumes the open end.
+- With the same wire, NEC gives higher scores for coax lying on the ground than for a 5 m
+  counterpoise at 1.4 m: the lossy ground damps the resonances.
+
+The 80m error comes mostly from the wire model: its fixed loss resistance also gives too much
+feed resistance for short wires on 80m with the 5 m counterpoise (model 7 points high).
+
 ## Not modelled
 
-Coax loss and common-mode current on the coax, unun loss, nearby objects, other wire shapes,
+Coax loss, common-mode current on the coax with a counterpoise wire or radials, unun loss, nearby objects, other wire shapes,
 ground other than "average", and anything not checked against real measurements.
 
 ## Re-running

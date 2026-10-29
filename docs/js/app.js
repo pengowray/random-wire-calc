@@ -11,11 +11,13 @@ const $ = id => document.getElementById(id);
 const DEFAULT_BANDS = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
 const DEFAULTS = {
     region: guessRegion(), bands: DEFAULT_BANDS, min: '7', max: '60', wire: '0.96', vf: '0.95',
-    matching: '9', tuner: '10', cp: 'wire', cpLen: '5', count: '10', spacing: '5', units: 'm', log: true,
+    matching: '9', tuner: '10', cp: 'wire', cpLen: '5', coaxLen: '10', count: '10', spacing: '5', units: 'm', log: true,
     check: '', compare: '',
 };
 // Suggestions are cut between lengths that score within this many points of the suggestion.
 const TOLERANCE = 3;
+// "Compare with" values that draw a second score line for another counterpoise setting.
+const CP_COMPARE = { 'cp-wire': 'wire', 'cp-radials': 'radials', 'cp-coax': 'coax' };
 
 let sortKey = 'rank', sortDir = 1;
 let suppressHash = false;
@@ -25,7 +27,13 @@ function init() {
     const regionSel = $('region');
     for (const [key, r] of Object.entries(REGIONS)) regionSel.add(new Option(r.name, key));
     const compareSel = $('compare');
-    for (const [key, p] of Object.entries(PRESETS)) compareSel.add(new Option(p.name, key));
+    const lists = document.createElement('optgroup');
+    lists.label = 'Published length lists';
+    for (const [key, p] of Object.entries(PRESETS)) lists.appendChild(new Option(p.name, key));
+    const cps = document.createElement('optgroup');
+    cps.label = 'Counterpoise settings';
+    for (const key of Object.keys(CP_COMPARE)) cps.appendChild(new Option('', key));
+    compareSel.append(lists, cps);
 
     applyHash();
     buildBandList();
@@ -34,6 +42,7 @@ function init() {
         el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
             if (el.id === 'region') buildBandList();
             if (el.id === 'units') convertPlainLengths(el.value);
+            if (el.id === 'cpKind' && CP_COMPARE[$('compare').value] === el.value) $('compare').value = '';
             update();
         });
     });
@@ -81,7 +90,7 @@ function buildBandList() {
 // When the length unit changes, rewrite plain numbers in the length fields so they keep
 // the same length ("7" metres becomes "23" feet). Values with a unit typed are left alone.
 function convertPlainLengths(units) {
-    for (const id of ['minLen', 'maxLen', 'cpLen', 'checkLen']) {
+    for (const id of ['minLen', 'maxLen', 'cpLen', 'coaxLen', 'checkLen']) {
         const el = $(id);
         const v = el.value.trim();
         if (!/^\d*\.?\d+$/.test(v)) continue;
@@ -117,12 +126,20 @@ function readSettings() {
     if (!(vf > 0.3 && vf <= 1)) vf = 0.95;
 
     const cpKind = $('cpKind').value;
-    $('cpLen').classList.toggle('hidden', cpKind !== 'wire');
-    $('cpUnit').classList.toggle('hidden', cpKind !== 'wire');
-    const cpP = parseLength($('cpLen').value, units);
+    $('cpGroup').classList.toggle('hidden', cpKind !== 'wire');
+    $('coaxGroup').classList.toggle('hidden', cpKind !== 'coax');
+    // Both lengths are read whatever the setting, since "Compare with" can use either.
+    const cpP = parseLength($('cpLen').value, units), coaxP = parseLength($('coaxLen').value, units);
     setInvalid($('cpLen'), cpKind === 'wire' && !(cpP && cpP.metres > 0));
-    const counterpoise = cpKind === 'wire' && cpP && cpP.metres > 0
-        ? { kind: 'wire', lengthM: cpP.metres, isFeet: cpP.isFeet } : { kind: 'radials' };
+    setInvalid($('coaxLen'), cpKind === 'coax' && !(coaxP && coaxP.metres > 0));
+    const counterpoises = {
+        wire: { kind: 'wire', lengthM: cpP && cpP.metres > 0 ? cpP.metres : 5, isFeet: !!cpP?.isFeet },
+        radials: { kind: 'radials' },
+        coax: { kind: 'coax', lengthM: coaxP && coaxP.metres > 0 ? coaxP.metres : 10, isFeet: !!coaxP?.isFeet },
+    };
+    const counterpoise = counterpoises[cpKind];
+    const compare = $('compare').value;
+    updateCompareOptions(counterpoises, cpKind);
 
     return {
         bands, min, max, rangeNote, minFeet: !!minP?.isFeet, maxFeet: !!maxP?.isFeet,
@@ -131,9 +148,28 @@ function readSettings() {
         count: clampInt($('count').value, 1, 40, 10),
         spacing: Math.max(0, parseFloat($('spacing').value) || 0) / 100,
         units: $('units').value, log: $('logAxis').checked,
-        compare: $('compare').value,
+        compare, altCounterpoise: CP_COMPARE[compare] ? counterpoises[CP_COMPARE[compare]] : null,
     };
 }
+
+// Option text for the counterpoise choices in "Compare with". The current setting is listed
+// but disabled.
+function updateCompareOptions(counterpoises, current) {
+    for (const opt of $('compare').querySelectorAll('option')) {
+        const kind = CP_COMPARE[opt.value];
+        if (!kind) continue;
+        opt.text = cpName(counterpoises[kind]);
+        opt.disabled = kind === current;
+    }
+}
+
+// "Counterpoise wire, 5 m", "Ground radials", "Coax shield only, 10 m of coax"
+function cpName(cp) {
+    if (cp.kind === 'wire') return `Counterpoise wire, ${fmtCp(cp)}`;
+    if (cp.kind === 'coax') return `Coax shield only, ${fmtCp(cp)} of coax`;
+    return 'Ground radials';
+}
+function cpNameLower(cp) { const n = cpName(cp); return n[0].toLowerCase() + n.slice(1); }
 
 function update() {
     const s = readSettings();
@@ -143,7 +179,7 @@ function update() {
         Plotly.purge($('plot'));
         $('chartSummary').textContent = '';
         $('checkResult').textContent = '';
-        emptyTable('suggestions', 7, 'No bands selected. Select at least one band.');
+        emptyTable('suggestions', 8, 'No bands selected. Select at least one band.');
         emptyTable('bandTable', 7, 'No bands selected. Select at least one band.');
         $('compareSection').classList.add('hidden');
         updateHash();
@@ -151,7 +187,7 @@ function update() {
     }
     const ctx = makeContext(s.bands, s.setup, { ratio: s.ratio, maxSwr: s.maxSwr });
 
-    const presetFeet = s.compare ? presetLengthsFeet(s.compare) : [];
+    const presetFeet = PRESETS[s.compare] ? presetLengthsFeet(s.compare) : [];
     const presetM = presetFeet.map(f => f * METRES_PER_FOOT);
     const check = readCheck();
     // The chart covers the user's range, plus any comparison or checked lengths outside it.
@@ -163,13 +199,24 @@ function update() {
     const details = new Map(suggestions.map(sg => [sg.rank, evaluateLength(sg.lengthM, ctx)]));
     const presets = presetM.map((m, i) => ({ feet: presetFeet[i], lengthM: m, ...evaluateLength(m, ctx) }));
     const checked = check.metres ? evaluateLength(check.metres, ctx) : null;
+    // Second score line: the same settings with the "Compare with" counterpoise.
+    let alt = null;
+    if (s.altCounterpoise) {
+        const altCtx = makeContext(s.bands, { ...s.setup, counterpoise: s.altCounterpoise }, { ratio: s.ratio, maxSwr: s.maxSwr });
+        const altSw = sweep(altCtx, sw.lengths);
+        const best = pickSuggestions(altSw, { count: 1, spacing: s.spacing, tolerance: TOLERANCE, minM: s.min, maxM: s.max })[0];
+        alt = {
+            cp: s.altCounterpoise, ctx: altCtx, scores: altSw.scores, best,
+            suggestionScores: new Map(suggestions.map(sg => [sg.rank, evaluateLength(sg.lengthM, altCtx).score])),
+        };
+    }
 
     // Bands where no length in the range keeps the whole band within the tuner's limit. They
     // are named once above the table instead of being every row's worst band.
     const hopeless = new Set(ctx.bands.filter((b, bi) =>
         !sw.lengths.some((L, j) => L >= s.min && L <= s.max && sw.bandSwrMax[bi][j] <= s.maxSwr)).map(b => b.name));
 
-    last = { s, ctx, sw, suggestions, details, presets, checked, check, hopeless };
+    last = { s, ctx, sw, suggestions, details, presets, checked, check, hopeless, alt };
     renderCheck();
     renderChart();
     renderSuggestions();
@@ -218,20 +265,31 @@ function nearestSuggestion(m, suggestions) {
 }
 
 function renderChart() {
-    const { s, sw, suggestions, presets, checked, ctx } = last;
+    const { s, sw, suggestions, presets, checked, ctx, alt } = last;
     const top = suggestions[0];
+    const withCp = alt ? ` with ${cpNameLower(s.setup.counterpoise)}` : '';
+    const altTxt = alt && alt.best
+        ? ` With ${cpNameLower(alt.cp)}: ${formatBoth(alt.best.lengthM, s.units)}, score ${alt.best.score.toFixed(0)}.` : '';
     $('chartSummary').textContent = top
-        ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}. Lower panel: each band's score; blue is inside your tuner's limit, red is beyond it.`
+        ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}${withCp}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}.${altTxt} Lower panel: each band's score; blue is inside your tuner's limit, red is beyond it.`
         : '';
     drawChart($('plot'), {
         sw, bands: ctx.bands.map(b => b.name), suggestions, presets, checked,
-        presetName: s.compare ? PRESETS[s.compare].name : '', range: { min: s.min, max: s.max },
+        presetName: PRESETS[s.compare] ? PRESETS[s.compare].name : '', range: { min: s.min, max: s.max },
+        scoreName: alt ? `Score with ${cpNameLower(s.setup.counterpoise)}` : 'Score',
+        alt: alt ? { scores: alt.scores, name: `Score with ${cpNameLower(alt.cp)}` } : null,
     }, { units: s.units, log: s.log }, m => { $('checkLen').value = toInput(m); update(); });
 }
 
 function renderSuggestions() {
     if (!last) return;
-    const { s, suggestions, details, checked, hopeless } = last;
+    const { s, suggestions, details, checked, hopeless, alt } = last;
+    const altHead = $('altScoreHead');
+    altHead.classList.toggle('hidden', !alt);
+    if (alt) {
+        altHead.textContent = `Score with ${cpNameLower(alt.cp)}`;
+        altHead.title = `Score at this length if the Counterpoise setting is ${cpNameLower(alt.cp)}. All other settings are the same.`;
+    }
     $('suggestionsTitle').textContent = `Suggested lengths (${suggestions.length})`;
     const hopelessTxt = hopelessNote(hopeless);
     const fewer = suggestions.length && suggestions.length < s.count
@@ -243,7 +301,7 @@ function renderSuggestions() {
         th.setAttribute('aria-sort', th.dataset.sort === sortKey ? (sortDir > 0 ? 'ascending' : 'descending') : 'none');
     });
     if (!suggestions.length) {
-        emptyTable('suggestions', 7, `No suggested lengths between ${fmtLen(s.min)} and ${fmtLen(s.max)}. Widen the length range.`);
+        emptyTable('suggestions', 8, `No suggested lengths between ${fmtLen(s.min)} and ${fmtLen(s.max)}. Widen the length range.`);
         return;
     }
     const key = { rank: g => g.rank, length: g => g.lengthM, score: g => g.score }[sortKey];
@@ -263,6 +321,7 @@ function renderSuggestions() {
             <td class="num">${formatFeetInches(g.lengthM)}</td>
             <td class="num">${fmtRange(g.fromM, g.toM, s.units)}</td>
             <td class="num">${scoreCell(g.score)}</td>
+            ${alt ? `<td class="num">${scoreCell(alt.suggestionScores.get(g.rank))}</td>` : ''}
             <td class="num">${ok} of ${d.bands.length}</td>
             <td>${worst ? `${worst.name} (SWR up to ${fmtSwr(worst.swrMax)})` : ''}</td>`;
         tr.addEventListener('click', () => { $('checkLen').value = toInput(g.lengthM); update(); });
@@ -273,7 +332,7 @@ function renderSuggestions() {
 function renderCompare() {
     const { s, presets, suggestions } = last;
     const sec = $('compareSection');
-    if (!s.compare) { sec.classList.add('hidden'); return; }
+    if (!PRESETS[s.compare]) { sec.classList.add('hidden'); return; }
     sec.classList.remove('hidden');
     const p = PRESETS[s.compare];
     $('compareTitle').textContent = `Compared with: ${p.name} (${presets.length} lengths)`;
@@ -319,6 +378,7 @@ function renderBands() {
         if (warnings.has(b.name)) {
             notes.push(`Counterpoise near a half-wave multiple on ${b.name}: a ${fmtCp(cp)} counterpoise raises the SWR on ${b.name} at every wire length.`);
         }
+        if (cp.kind === 'coax' && b.name === '160m') notes.push('Coax shield only was not checked against NEC on 160m.');
         if (b.inRange < 1) notes.push(`Highest SWR ${fmtSwr(b.swrMax)} at ${trim(b.worstFreq, 3)} MHz.`);
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -385,7 +445,7 @@ function currentControls() {
     return {
         region: $('region').value, bands: selectedBandNames(), min: $('minLen').value.trim(), max: $('maxLen').value.trim(),
         wire: $('wireType').value, vf: $('vfCustom').value.trim(), matching: $('matching').value, tuner: $('tuner').value,
-        cp: $('cpKind').value, cpLen: $('cpLen').value.trim(), count: $('count').value, spacing: $('spacing').value,
+        cp: $('cpKind').value, cpLen: $('cpLen').value.trim(), coaxLen: $('coaxLen').value.trim(), count: $('count').value, spacing: $('spacing').value,
         units: $('units').value, log: $('logAxis').checked, check: $('checkLen').value.trim(), compare: $('compare').value,
     };
 }
@@ -395,7 +455,7 @@ function setControls(c) {
     $('minLen').value = c.min; $('maxLen').value = c.max;
     $('wireType').value = c.wire; $('vfCustom').value = c.vf;
     $('matching').value = c.matching; $('tuner').value = c.tuner;
-    $('cpKind').value = c.cp; $('cpLen').value = c.cpLen;
+    $('cpKind').value = c.cp; $('cpLen').value = c.cpLen; $('coaxLen').value = c.coaxLen;
     $('count').value = c.count; $('spacing').value = c.spacing;
     $('units').value = c.units; $('logAxis').checked = c.log;
     $('checkLen').value = c.check; $('compare').value = c.compare;
@@ -419,6 +479,8 @@ function updateHash() {
     if (c.tuner !== DEFAULTS.tuner) p.set('tuner', c.tuner);
     if (c.cp !== DEFAULTS.cp) p.set('cp', c.cp);
     else if (c.cpLen !== DEFAULTS.cpLen) p.set('cp', c.cpLen);
+    if (c.cp !== 'wire' && c.cpLen !== DEFAULTS.cpLen && c.compare === 'cp-wire') p.set('cplen', c.cpLen);
+    if (c.coaxLen !== DEFAULTS.coaxLen && (c.cp === 'coax' || c.compare === 'cp-coax')) p.set('coax', c.coaxLen);
     if (c.count !== DEFAULTS.count) p.set('results', c.count);
     if (c.spacing !== DEFAULTS.spacing) p.set('spacing', c.spacing);
     if (c.units !== DEFAULTS.units) p.set('units', c.units);
@@ -451,8 +513,11 @@ function applyHash() {
     if (['1', '4', '9', '49', '64'].includes(p.get('match'))) c.matching = p.get('match');
     if (['2', '3', '10'].includes(p.get('tuner'))) c.tuner = p.get('tuner');
     const cp = p.get('cp');
-    if (cp === 'radials') c.cp = 'radials';
-    else if (cp) { c.cp = 'wire'; c.cpLen = cp; }
+    let cpLenSet = false;
+    if (cp === 'radials' || cp === 'coax') c.cp = cp;
+    else if (cp) { c.cp = 'wire'; c.cpLen = cp; cpLenSet = true; }
+    if (p.has('cplen')) { c.cpLen = p.get('cplen'); cpLenSet = true; }
+    if (p.has('coax')) c.coaxLen = p.get('coax');
     if (p.has('results')) c.count = p.get('results');
     if (p.has('spacing')) c.spacing = p.get('spacing');
     if (p.get('units') === 'ft') {
@@ -460,12 +525,13 @@ function applyHash() {
         // The defaults are in metres; restate any the link didn't set in feet.
         if (!p.has('min')) c.min = trim(Number(DEFAULTS.min) / METRES_PER_FOOT, 2);
         if (!p.has('max')) c.max = trim(Number(DEFAULTS.max) / METRES_PER_FOOT, 2);
-        if (!p.has('cp')) c.cpLen = trim(Number(DEFAULTS.cpLen) / METRES_PER_FOOT, 2);
+        if (!cpLenSet) c.cpLen = trim(Number(DEFAULTS.cpLen) / METRES_PER_FOOT, 2);
+        if (!p.has('coax')) c.coaxLen = trim(Number(DEFAULTS.coaxLen) / METRES_PER_FOOT, 2);
     }
     if (p.get('scale') === 'linear') c.log = false;
     if (p.has('check')) c.check = p.get('check');
     const compare = p.get('compare') || p.get('preset');
-    if (compare && PRESETS[compare]) c.compare = compare;
+    if (compare && (PRESETS[compare] || CP_COMPARE[compare])) c.compare = compare;
     else if (compare === 'sprott_feet') c.compare = 'sprott';
     setControls(c);
 }

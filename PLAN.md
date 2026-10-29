@@ -14,11 +14,17 @@
 - Check a length, band-by-band table, comparison with published lists on the same chart.
 - Split into docs/css and docs/js modules; model tests under tests/ (`npm test`).
 - Old page kept at docs/old/.
+- "Coax shield only" counterpoise (no counterpoise wire; the coax length matters), fitted to
+  NEC runs of coax lying on the ground. "Compare with" can draw a second score line for
+  another counterpoise setting.
 
 ## Next
 
 - Coax loss: SWR on a long coax run between the unun and the tuner loses power and hides
   the true SWR. Add a coax type and length setting.
+- Wire loss: the wire model's loss is a fixed resistance at the current maximum, which gives
+  too much feed resistance for wires shorter than about λ/4 (80m and 160m run high). A series
+  loss per metre, as used for the coax shield, may fit better. Refit and recheck.
 - Counterpoise search: score counterpoise lengths for a fixed wire (the NEC runs showed the
   counterpoise matters as much as the wire).
 - More NEC checks: inverted-L and fully horizontal wires, poor and very good ground, radials,
