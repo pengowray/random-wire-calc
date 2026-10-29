@@ -179,9 +179,13 @@ function renderCheck() {
         return;
     }
     const pct = Math.round(100 * percentileOf(sw, checked.score, s.min, s.max));
+    const rangeTxt = `${fmtLen(s.min)} to ${fmtLen(s.max)}`;
+    const rank = pct >= 100 ? `the highest score from ${rangeTxt}` : `better than ${pct}% of lengths from ${rangeTxt}`;
     const near = nearestSuggestion(checked.lengthM, suggestions);
-    const nearTxt = near ? ` Nearest suggestion: #${near.rank}, ${fmtM(near.lengthM)}, score ${near.score.toFixed(0)}.` : '';
-    out.textContent = `${head}, better than ${pct}% of lengths from ${fmtLen(s.min)} to ${fmtLen(s.max)}. ${bandsTxt}${nearTxt}`;
+    const isSuggestion = near && Math.abs(near.lengthM / checked.lengthM - 1) < 0.001;
+    const nearTxt = !near ? '' : isSuggestion ? ` Suggestion #${near.rank}.`
+        : ` Nearest suggestion: #${near.rank}, ${fmtM(near.lengthM)}, score ${near.score.toFixed(0)}.`;
+    out.textContent = `${head}, ${rank}. ${bandsTxt}${nearTxt}`;
 }
 
 function nearestSuggestion(m, suggestions) {
@@ -318,7 +322,7 @@ function emptyTable(id, cols, text) {
 
 function fmtM(m) { return `${m.toFixed(2)} m`; }
 function fmtLen(m) {
-    return $('units').value === 'ft' ? `${trim(m / METRES_PER_FOOT, 1)} ft` : `${trim(m, 2)} m`;
+    return $('units').value === 'ft' ? `${Math.round(m / METRES_PER_FOOT)} ft` : `${trim(m, 2)} m`;
 }
 function fmtRange(a, b, units) {
     return units === 'ft'

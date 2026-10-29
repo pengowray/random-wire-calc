@@ -228,7 +228,8 @@ export function sweep(ctx, lengths) {
 
 // Best local maxima of the score curve, at least `spacing` (fraction) apart, so near-identical
 // lengths are not listed twice. Each gets the range around it where the score stays within
-// `tolerance` points: any length in that range is about as good.
+// `tolerance` points: any length in that range is about as good. The range stops at the next
+// dip in the curve, so it never runs into a neighbouring peak's range.
 export function pickSuggestions(sw, { count = 10, spacing = 0.05, tolerance = 3, minM = -Infinity, maxM = Infinity } = {}) {
     const { lengths: L, scores: s } = sw;
     const peaks = [];
@@ -237,6 +238,20 @@ export function pickSuggestions(sw, { count = 10, spacing = 0.05, tolerance = 3,
         const left = i === 0 || L[i - 1] < minM ? -Infinity : s[i - 1];
         const right = i === L.length - 1 || L[i + 1] > maxM ? -Infinity : s[i + 1];
         if (s[i] >= left && s[i] > right) peaks.push(i);
+    }
+    // Drop bumps that barely rise above the curve around them (prominence under 1 point):
+    // on a smooth slope they are not meaningfully better than their neighbours.
+    const inRange = i => i >= 0 && i < L.length && L[i] >= minM && L[i] <= maxM;
+    const prominence = i => {
+        let lo = s[i], loL = s[i], loR = s[i];
+        for (let k = i - 1; inRange(k) && s[k] <= s[i]; k--) loL = Math.min(loL, s[k]);
+        for (let k = i + 1; inRange(k) && s[k] <= s[i]; k++) loR = Math.min(loR, s[k]);
+        lo = Math.max(loL, loR);
+        return s[i] - lo;
+    };
+    const isEdge = i => !inRange(i - 1) || !inRange(i + 1);
+    for (let k = peaks.length - 1; k >= 0; k--) {
+        if (!isEdge(peaks[k]) && prominence(peaks[k]) < 1) peaks.splice(k, 1);
     }
     peaks.sort((a, b) => s[b] - s[a]);
     const chosen = [];
@@ -247,8 +262,8 @@ export function pickSuggestions(sw, { count = 10, spacing = 0.05, tolerance = 3,
     }
     return chosen.map((i, rank) => {
         let a = i, b = i;
-        while (a > 0 && L[a - 1] >= minM && s[a - 1] >= s[i] - tolerance) a--;
-        while (b < L.length - 1 && L[b + 1] <= maxM && s[b + 1] >= s[i] - tolerance) b++;
+        while (a > 0 && L[a - 1] >= minM && s[a - 1] >= s[i] - tolerance && s[a - 1] <= s[a]) a--;
+        while (b < L.length - 1 && L[b + 1] <= maxM && s[b + 1] >= s[i] - tolerance && s[b + 1] <= s[b]) b++;
         return { rank: rank + 1, index: i, lengthM: L[i], score: s[i], fromM: L[a], toM: L[b] };
     });
 }

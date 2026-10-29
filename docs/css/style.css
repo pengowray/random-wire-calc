@@ -97,7 +97,7 @@ legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
 
 .setting-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 12px 24px;
     margin-bottom: 8px;
 }
@@ -107,7 +107,9 @@ legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
 label.inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; max-width: 100%; }
 label.inline select { font-weight: 400; min-width: 0; }
 .range-inputs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.range-inputs input { width: 6em; }
+.range-inputs input { width: 5em; }
+.range-inputs { flex-wrap: nowrap; }
+.range-inputs select { min-width: 0; flex: 1 1 auto; }
 .unit { color: var(--ink-2); }
 .field-note { color: var(--muted); font-size: 0.88rem; font-weight: 400; }
 .field-note:empty { display: none; }
