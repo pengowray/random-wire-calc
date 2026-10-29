@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id);
 const DEFAULT_BANDS = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
 const DEFAULTS = {
     region: guessRegion(), bands: DEFAULT_BANDS, min: '7', max: '60', wire: '0.96', vf: '0.95',
-    matching: '9', tuner: '10', cp: 'wire', cpLen: '5', coaxLen: '10', count: '10', spacing: '5', units: 'm', log: true,
+    matching: '9', tuner: '10', cp: 'wire', cpLen: '5', coaxLen: '10', count: '10', spacing: '5', units: 'm', log: false,
     check: '', compare: '',
 };
 // Suggestions are cut between lengths that score within this many points of the suggestion.
@@ -486,7 +486,7 @@ function updateHash() {
     if (c.count !== DEFAULTS.count) p.set('results', c.count);
     if (c.spacing !== DEFAULTS.spacing) p.set('spacing', c.spacing);
     if (c.units !== DEFAULTS.units) p.set('units', c.units);
-    if (!c.log) p.set('scale', 'linear');
+    if (c.log) p.set('scale', 'log');
     if (c.check) p.set('check', c.check);
     if (c.compare) p.set('compare', c.compare);
     const hash = '#' + p.toString();
@@ -530,7 +530,7 @@ function applyHash() {
         if (!cpLenSet) c.cpLen = trim(Number(DEFAULTS.cpLen) / METRES_PER_FOOT, 2);
         if (!p.has('coax')) c.coaxLen = trim(Number(DEFAULTS.coaxLen) / METRES_PER_FOOT, 2);
     }
-    if (p.get('scale') === 'linear') c.log = false;
+    if (p.get('scale') === 'log') c.log = true;
     if (p.has('check')) c.check = p.get('check');
     const compare = p.get('compare') || p.get('preset');
     if (compare && (PRESETS[compare] || CP_COMPARE[compare])) c.compare = compare;

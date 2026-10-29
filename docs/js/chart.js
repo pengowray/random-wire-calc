@@ -138,7 +138,16 @@ export function drawChart(el, data, opts, onPick) {
         yaxis2: { domain: [0, 0.38], type: 'category', autorange: 'reversed', linecolor: axis, fixedrange: true },
         shapes, annotations,
     };
-    Plotly.react(el, traces, layout, { responsive: true, displaylogo: false, displayModeBar: narrow ? false : 'hover', modeBarButtonsToRemove: ['select2d', 'lasso2d'] });
+    // Plotly's Reset axes and double-click go back to the range of the first draw, not the
+    // current one, so after a settings change they showed the wrong lengths. Both are replaced
+    // with "Show whole range", which uses the range of the latest draw.
+    el._wholeRange = layout.xaxis.range;
+    const showWhole = gd => Plotly.relayout(gd, { 'xaxis.range': gd._wholeRange });
+    Plotly.react(el, traces, layout, {
+        responsive: true, displaylogo: false, displayModeBar: narrow ? false : 'hover', doubleClick: false,
+        modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'resetScale2d'],
+        modeBarButtonsToAdd: [{ name: 'Show whole range', icon: Plotly.Icons.home, click: showWhole }],
+    });
     // Bound once, so it reads the units of the latest draw rather than the first.
     el.dataset.units = opts.units;
     if (!el.dataset.bound) {
@@ -147,6 +156,7 @@ export function drawChart(el, data, opts, onPick) {
             const p = ev.points && ev.points[0];
             if (p) onPick(el.dataset.units === 'ft' ? p.x * METRES_PER_FOOT : p.x);
         });
+        el.on('plotly_doubleclick', () => { showWhole(el); });
     }
 }
 
