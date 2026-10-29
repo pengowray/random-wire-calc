@@ -60,7 +60,6 @@ function buildBandList() {
         for (const b of BAND_ORDER) {
             const label = document.createElement('label');
             label.innerHTML = `<input type="checkbox" value="${b}"> ${b}`;
-            label.querySelector('input').addEventListener('change', update);
             list.appendChild(label);
         }
         list.dataset.built = '1';
@@ -163,10 +162,10 @@ function update() {
     const presets = presetM.map((m, i) => ({ feet: presetFeet[i], lengthM: m, ...evaluateLength(m, ctx) }));
     const checked = check.metres ? evaluateLength(check.metres, ctx) : null;
 
-    // Bands that stay beyond the tuner's limit at every length in the range. They are named
-    // once above the table instead of being every row's worst band.
+    // Bands where no length in the range keeps the whole band within the tuner's limit. They
+    // are named once above the table instead of being every row's worst band.
     const hopeless = new Set(ctx.bands.filter((b, bi) =>
-        !sw.lengths.some((L, j) => L >= s.min && L <= s.max && sw.bandScores[bi][j] >= 50)).map(b => b.name));
+        !sw.lengths.some((L, j) => L >= s.min && L <= s.max && sw.bandSwrMax[bi][j] <= s.maxSwr)).map(b => b.name));
 
     last = { s, ctx, sw, suggestions, details, presets, checked, check, hopeless };
     renderCheck();
@@ -335,7 +334,7 @@ function renderBands() {
 function hopelessNote(hopeless) {
     if (!hopeless.size) return '';
     const one = hopeless.size === 1;
-    return ` ${listBands(hopeless)} ${one ? 'is' : 'are'} beyond your tuner's limit at every length in the length range, so the Worst band column leaves ${one ? 'it' : 'them'} out.`;
+    return ` No length in the length range keeps all of ${listBands(hopeless)} within your tuner's limit, so the Worst band column leaves ${one ? 'it' : 'them'} out.`;
 }
 
 // The band with the highest SWR, so it agrees with the "Bands in tuner range" count.
@@ -454,7 +453,13 @@ function applyHash() {
     else if (cp) { c.cp = 'wire'; c.cpLen = cp; }
     if (p.has('results')) c.count = p.get('results');
     if (p.has('spacing')) c.spacing = p.get('spacing');
-    if (p.get('units') === 'ft') c.units = 'ft';
+    if (p.get('units') === 'ft') {
+        c.units = 'ft';
+        // The defaults are in metres; restate any the link didn't set in feet.
+        if (!p.has('min')) c.min = trim(Number(DEFAULTS.min) / METRES_PER_FOOT, 2);
+        if (!p.has('max')) c.max = trim(Number(DEFAULTS.max) / METRES_PER_FOOT, 2);
+        if (!p.has('cp')) c.cpLen = trim(Number(DEFAULTS.cpLen) / METRES_PER_FOOT, 2);
+    }
     if (p.get('scale') === 'linear') c.log = false;
     if (p.has('check')) c.check = p.get('check');
     const compare = p.get('compare') || p.get('preset');

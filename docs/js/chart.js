@@ -118,11 +118,13 @@ export function drawChart(el, data, opts, onPick) {
         shapes, annotations,
     };
     Plotly.react(el, traces, layout, { responsive: true, displaylogo: false, displayModeBar: narrow ? false : 'hover', modeBarButtonsToRemove: ['select2d', 'lasso2d'] });
+    // Bound once, so it reads the units of the latest draw rather than the first.
+    el.dataset.units = opts.units;
     if (!el.dataset.bound) {
         el.dataset.bound = '1';
         el.on('plotly_click', ev => {
             const p = ev.points && ev.points[0];
-            if (p) onPick(opts.units === 'ft' ? p.x * METRES_PER_FOOT : p.x);
+            if (p) onPick(el.dataset.units === 'ft' ? p.x * METRES_PER_FOOT : p.x);
         });
     }
 }
