@@ -31,6 +31,16 @@ test('feedpoint impedance matches the Python reference model (model/tlmodel.py)'
     }
 });
 
+test('coax shield counterpoise matches the Python reference model (model/tlmodel.py coax_stub)', () => {
+    const ref = [[10, 7.1, 10, 102.89, -44.79], [20, 3.6, 10, 69.53, -316.19], [37.2, 14.2, 5, 112.86, 65.71],
+        [30, 28.5, 20, 588.42, 451.86], [15, 1.85, 10, 94.62, -1375.84]];
+    for (const [L, f, coax, r, x] of ref) {
+        const [zr, zx] = feedImpedance(L, f, { vf: 0.9918, counterpoise: { kind: 'coax', lengthM: coax } });
+        const err = Math.hypot(zr - r, zx - x) / Math.hypot(r, x);
+        assert.ok(err < 0.01, `${L} m, ${coax} m coax, ${f} MHz: got ${zr.toFixed(1)}${zx.toFixed(1)}j, want ${r}${x}j`);
+    }
+});
+
 test('SWR and marks', () => {
     close(swrAfterTransformer([450, 0], 9), 1, 1e-9, '450 ohms through 9:1');
     close(swrAfterTransformer([100, 0], 1), 2, 1e-9, '100 ohms direct');

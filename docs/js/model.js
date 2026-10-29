@@ -22,6 +22,16 @@ export const MODEL = {
     cpLossOhms: 0.36,
     cpRadScale: 0.438,
     radialsOhms: 15,        // "ground radials": treated as a plain resistance
+    // Coax shield as the counterpoise (no counterpoise wire). Fitted to NEC-2 runs of 5, 10
+    // and 20 m of coax dropping from the feedpoint and lying along the ground, open at the
+    // radio end (model/fit_coax.json). Lying on lossy ground, it fits a line with series loss
+    // per metre better than the fixed loss resistance used for the wires. The user's VF is for
+    // the antenna wire, so it doesn't apply here.
+    coaxZ0: 291,
+    coaxVf: 0.966,
+    coaxLossPerM: 11.13,    // series ohms per metre at 10 MHz
+    coaxLossExp: 0.481,     // ... scaled by (f / 10 MHz) to this power
+    coaxRadScale: 0.512,
 };
 
 // Sine and cosine integrals, Numerical Recipes "cisi".
@@ -117,9 +127,37 @@ export function wireImpedance(lengthM, freqMHz, vf, z0, lossOhms, radScale) {
     return [z0 * Math.sinh(2 * al) / den, -z0 * Math.sin(2 * bl) / den];
 }
 
-// setup: { vf, counterpoise: { kind: 'wire', lengthM } | { kind: 'radials' } }
+// Input impedance [R, X] of the coax shield lying along the ground, open at the radio end.
+// Same as model/tlmodel.py coax_stub.
+export function coaxShieldImpedance(lengthM, freqMHz) {
+    const { coaxZ0: z0, coaxVf: vf } = MODEL;
+    const w = 2 * Math.PI * freqMHz * 1e6;
+    const xs = w * z0 / (vf * C_MPS);            // series reactance per metre
+    const b = w / (z0 * vf * C_MPS);             // shunt susceptance per metre
+    const rs = MODEL.coaxLossPerM * (freqMHz / 10) ** MODEL.coaxLossExp;
+    const k = w / C_MPS;
+    // γ = sqrt((rs + j·xs)(j·b)) plus radiation, and Zc = sqrt((rs + j·xs) / (j·b))
+    const [gRe0, gIm] = csqrt(-xs * b, rs * b);
+    const gRe = gRe0 + MODEL.coaxRadScale * monopoleRadiationResistance(k * lengthM) / z0 / lengthM;
+    const [zcRe, zcIm] = csqrt(xs / b, -rs / b);
+    const al = gRe * lengthM, bl = gIm * lengthM;
+    // coth(x + iy) = (sinh 2x − i sin 2y) / (cosh 2x − cos 2y)
+    const den = Math.cosh(2 * al) - Math.cos(2 * bl);
+    const cRe = Math.sinh(2 * al) / den, cIm = -Math.sin(2 * bl) / den;
+    return [zcRe * cRe - zcIm * cIm, zcRe * cIm + zcIm * cRe];
+}
+
+function csqrt(re, im) {
+    const m = Math.hypot(re, im);
+    const r = Math.sqrt((m + re) / 2);
+    const i = Math.sqrt(Math.max(0, (m - re) / 2));
+    return [r, im < 0 ? -i : i];
+}
+
+// setup: { vf, counterpoise: { kind: 'wire' | 'coax', lengthM } | { kind: 'radials' } }
 export function counterpoiseImpedance(freqMHz, setup) {
     const cp = setup.counterpoise;
+    if (cp && cp.kind === 'coax' && cp.lengthM > 0) return coaxShieldImpedance(cp.lengthM, freqMHz);
     if (!cp || cp.kind === 'radials' || !(cp.lengthM > 0)) return [MODEL.radialsOhms, 0];
     const vf = setup.vf * MODEL.cpVfRatio;
     return wireImpedance(cp.lengthM, freqMHz, vf, MODEL.cpZ0, MODEL.cpLossOhms, MODEL.cpRadScale);
