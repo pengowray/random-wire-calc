@@ -51,7 +51,8 @@ function init() {
     update();
 }
 
-// Band checkboxes for the chosen region; bands the region lacks (60m in VK) are hidden.
+// Band checkboxes for the chosen region. Bands the region lacks (60m in VK) stay in place but
+// are disabled, so the list keeps its width and the Band edges dropdown doesn't move.
 function buildBandList() {
     const region = REGIONS[$('region').value];
     const list = $('bandList');
@@ -71,8 +72,9 @@ function buildBandList() {
     list.querySelectorAll('label').forEach(label => {
         const b = label.querySelector('input').value;
         const segs = region.bands[b];
-        label.classList.toggle('hidden', !segs);
-        label.title = segs ? formatSegments(segs) : '';
+        label.querySelector('input').disabled = !segs;
+        label.classList.toggle('unavailable', !segs);
+        label.title = segs ? formatSegments(segs) : `Not allocated in ${region.name}`;
     });
 }
 

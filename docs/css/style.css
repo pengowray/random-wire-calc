@@ -94,6 +94,8 @@ legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
     font-variant-numeric: tabular-nums;
 }
 .band-list label:hover { background: var(--accent-wash); }
+.band-list label.unavailable { color: var(--muted); cursor: default; }
+.band-list label.unavailable:hover { background: none; }
 
 .setting-grid {
     display: grid;
