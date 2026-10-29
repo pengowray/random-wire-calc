@@ -264,7 +264,8 @@ export function percentileOf(sw, score, minM, maxM) {
     return n ? below / n : null;
 }
 
-// Counterpoise lengths within 10% of a multiple of a half wavelength somewhere in a band.
+// Bands where the counterpoise is within 6% of a multiple of a half wavelength. Beyond about
+// 6% the NEC sweeps showed little effect on that band's SWR.
 export function counterpoiseWarnings(ctx) {
     const cp = ctx.setup.counterpoise;
     if (!cp || cp.kind !== 'wire' || !(cp.lengthM > 0)) return new Map();
@@ -274,7 +275,7 @@ export function counterpoiseWarnings(ctx) {
         for (const f of b.freqs) {
             const halves = cp.lengthM / (C_MPS * vf / (f * 1e6) / 2);
             const n = Math.round(halves);
-            if (n >= 1 && Math.abs(halves - n) / n < 0.1) { out.set(b.name, n); break; }
+            if (n >= 1 && Math.abs(halves - n) / n < 0.06) { out.set(b.name, n); break; }
         }
     }
     return out;

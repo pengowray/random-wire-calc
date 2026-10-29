@@ -2,1117 +2,222 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Random Wire Calculator [VK3PGO]</title>
+    <meta name="description" content="Suggests wire lengths for an end-fed random wire antenna, scored by modelled SWR on each band you select.">
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        .controls {
-            margin-bottom: 20px;
-        }
-        .checkboxes {
-            margin-bottom: 10px;
-        }
-        .plot {
-            width: 100%;
-            height: 800px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-        th {
-            background-color: #f2f2f2;
-            cursor: pointer;
-        }
-        footer {
-            margin-top: 20px;
-            text-align: center;
-            font-size: 0.9em;
-        }
-        .hidden {
-            display: none;
-        }
-        .caution {
-            background-color: #f2dede;
-            color: #a94442;
-            padding: 10px;
-            margin-bottom: 20px;}
-    </style>
+    <script type="module" src="js/app.js"></script>
 </head>
 <body>
+<header class="page-head">
+    <h1>Random Wire Calculator [VK3PGO]</h1>
+    <p class="subtitle" id="subtitle">Suggests wire lengths for an end-fed random wire antenna, scored by modelled SWR on each band you select.</p>
+    <p class="caution" id="caution">Results come from a computer model and have not been checked against real antennas. Post measurements or problems in <a href="https://github.com/pengowray/random-wire-calc/discussions">GitHub Discussions</a>.</p>
+</header>
 
-<h1>Random Wire Calculator [VK3PGO]</h1>
+<main>
+<section class="settings" aria-label="Settings">
+    <fieldset class="bands">
+        <legend>Bands</legend>
+        <div id="bandList" class="band-list"></div>
+        <label class="inline">Band edges
+            <select id="region"></select>
+        </label>
+    </fieldset>
 
-<div class="controls">
-    <div class="checkboxes">
-        <label><input type="checkbox" id="160m" checked> 160m Band</label>
-        <label><input type="checkbox" id="80m" checked> 80m Band</label>
-        <label><input type="checkbox" id="60m"> 60m Band</label>
-        <label><input type="checkbox" id="40m" checked> 40m Band</label>
-        <label><input type="checkbox" id="30m" checked> 30m Band</label>
-        <label><input type="checkbox" id="20m" checked> 20m Band</label>
-        <label><input type="checkbox" id="17m" checked> 17m Band</label>
-        <label><input type="checkbox" id="15m" checked> 15m Band</label>
-        <label><input type="checkbox" id="12m" checked> 12m Band</label>
-        <label><input type="checkbox" id="10m" checked> 10m Band</label>
-        <label><input type="checkbox" id="6m"> 6m Band</label>
+    <div class="setting-grid">
+        <label>Wire length
+            <span class="range-inputs">
+                <input type="text" id="minLen" inputmode="decimal" value="7" aria-label="Shortest wire length">
+                <span>to</span>
+                <input type="text" id="maxLen" inputmode="decimal" value="60" aria-label="Longest wire length">
+                <span class="unit">m</span>
+            </span>
+            <span class="field-note" id="rangeNote"></span>
+        </label>
+
+        <label>Wire
+            <span class="range-inputs">
+            <select id="wireType" title="Sets the velocity factor. Insulation slows the wave, so an insulated wire resonates at a shorter length.">
+                <option value="0.99">Bare wire (VF 0.99)</option>
+                <option value="0.96">Insulated wire (VF 0.96)</option>
+                <option value="0.93">Thick insulation (VF 0.93)</option>
+                <option value="custom">Custom velocity factor</option>
+            </select>
+            <input type="text" id="vfCustom" inputmode="decimal" value="0.95" aria-label="Custom velocity factor" class="short hidden">
+            </span>
+        </label>
+
+        <label>Matching
+            <select id="matching" title="The unun or transformer at the feedpoint, if any. The feedpoint impedance is divided by its ratio before the SWR is calculated.">
+                <option value="9">9:1 unun</option>
+                <option value="4">4:1 unun</option>
+                <option value="1">1:1, tuner at the feedpoint</option>
+                <option value="49">49:1 EFHW transformer</option>
+                <option value="64">64:1 EFHW transformer</option>
+            </select>
+        </label>
+
+        <label>Tuner
+            <select id="tuner" title="The highest SWR your tuner can match. Each length is scored against this SWR limit.">
+                <option value="10">External tuner (max SWR 10:1)</option>
+                <option value="3">Radio's built-in tuner (max SWR 3:1)</option>
+                <option value="2">No tuner (max SWR 2:1)</option>
+            </select>
+        </label>
+
+        <label>Counterpoise
+            <span class="range-inputs">
+                <select id="cpKind" title="Counterpoise wire length, or ground radials. A counterpoise close to half a wavelength on a band raises the SWR on that band.">
+                    <option value="wire">Counterpoise wire</option>
+                    <option value="radials">Ground radials</option>
+                </select>
+                <input type="text" id="cpLen" inputmode="decimal" value="5" aria-label="Counterpoise length" class="short">
+                <span class="unit" id="cpUnit">m</span>
+            </span>
+        </label>
     </div>
-    <label for="velocityFactor">Velocity Factor: </label>
-    <input type="text" id="velocityFactor" value="0.95">
-    <label for="numResults">Number of Results: </label>
-    <input type="number" id="numResults" value="25" min="1">
-    <input type="number" id="numResultsPreset" value="13" min="1">
-    <label for="minWireM">Min wire length (m): </label>
-    <input type="text" id="minWireM" value="7" inputmode="decimal" aria-label="Minimum wire length">
-    <label for="maxWireM">Max wire length (m): </label>
-    <input type="text" id="maxWireM" value="200" inputmode="decimal" aria-label="Maximum wire length">
-    <label><input type="checkbox" id="hzUnits" onchange="toggledUnit()"> MHz as primary axis</label>
-    <label><input type="checkbox" id="logarithmic" checked> Logarithmic</label>
-    <br>
-    <label for="preset">Preset: 
-        <select name="preset" id="preset" onchange="presetUpdated()">
-            <option value="calc">No preset (calculate)</option>
-            <option value="VE3EED">Jack VE3EED recommendations</option>
-            <option value="balundesigns1">Balun Designs recommendations: 160m through 10m</option>
-            <option value="balundesigns2">Balun Designs recommendations: limited to 40m through 6m</option>
-            <option value="balundesigns3">Balun Designs alternative lengths: 160m through 10m (if all others fail)</option>
-            <option value="qrpguys4010">QRPGuys 40m-10m UnUnTenna (9:1)</option>
-            <option value="sparc">VK3TR / SPARC VK3BSP blog (#0 and #1)</option>
-            <option value="sprott_feet">J. C. Sprott recommended lengths (feet)</option>
-        </select>
-    </label>
-</div>
-<div class="caution">
-    <p>
-        ⚠ Caution: <b>This tool is experimental.</b> The results are not verified and should be interpreted with care. This is a work in progress. There are bugs and issues. Results may change when this project is updated. 
-        <a href="https://github.com/pengowray/random-wire-calc">See GitHub for the readme, issues, and to share your thoughts (<i>Discussion</i> tab).</a>
-    </p>
 
-    
-</div>
+    <details class="more" id="moreSettings">
+        <summary>More settings</summary>
+        <div class="setting-grid">
+            <label>Suggestions to show
+                <input type="number" id="count" value="10" min="1" max="40" class="short">
+            </label>
+            <label title="A length within this percentage of a higher-scoring suggestion is left out of the suggestions.">Minimum spacing between suggestions
+                <span class="range-inputs"><input type="number" id="spacing" value="5" min="0" max="50" step="0.5" class="short"><span class="unit">%</span></span>
+            </label>
+            <label>Chart length units
+                <select id="units"><option value="m">Metres</option><option value="ft">Feet</option></select>
+            </label>
+            <label class="check"><input type="checkbox" id="logAxis" checked> Logarithmic length axis</label>
+        </div>
+    </details>
+    <p><button type="button" id="reset" class="link-button">Reset all settings</button></p>
+</section>
 
-<div id="plot" class="plot"></div>
-<h2>Random wire candiates</h2>
-<table id="resultsTable">
-    <thead>
-        <tr>
-            <th onclick="sortTable(0)">#</th>
-            <th onclick="sortTable(1)">Rank</th>
-            <th onclick="sortTable(0)">Length (m)</th>
-            <th onclick="sortTable(0)">Length (ft in)</th>
-            <th onclick="sortTable(4)" style="text-align: left;">Notes</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
+<section class="check-row" aria-label="Check a length">
+    <label for="checkLen" class="check-label">Check a length</label>
+    <input type="text" id="checkLen" inputmode="decimal" placeholder="e.g. 21.5 or 70 ft">
+    <p id="checkResult" class="check-result" aria-live="polite"></p>
+</section>
 
-<br>
-<div class="about">
-    Notes about random wire (long wire) antennas:
+<section class="chart-section">
+    <div class="chart-head">
+        <h2 id="chartTitle">Score by wire length</h2>
+        <label class="inline">Compare with
+            <select id="compare"><option value="">Nothing</option></select>
+        </label>
+    </div>
+    <p class="chart-summary" id="chartSummary"></p>
+    <div id="plot" class="plot" role="img" aria-labelledby="chartTitle chartSummary"></div>
+</section>
+
+<section>
+    <h2 id="suggestionsTitle">Suggested lengths</h2>
+    <p class="table-note" id="suggestionsNote"></p>
+    <div class="table-wrap">
+    <table id="suggestions" class="data">
+        <thead><tr>
+            <th data-sort="rank" class="num">#</th>
+            <th data-sort="length" class="num">Length</th>
+            <th class="num">Length (ft in)</th>
+            <th class="num" title="Any length in this range has a score within 3 points of the suggested length's score.">Cut between</th>
+            <th data-sort="score" class="num" title="Average of the band scores, from 0 to 100. A score of 50 means the SWR is about at your tuner's limit. Higher is better.">Score</th>
+            <th class="num" title="Number of selected bands where the SWR stays within the tuner's limit across the whole band.">Bands in tuner range</th>
+            <th>Worst band</th>
+        </tr></thead>
+        <tbody></tbody>
+    </table>
+    </div>
+</section>
+
+<section id="compareSection" class="hidden">
+    <h2 id="compareTitle"></h2>
+    <p class="table-note" id="compareNote"></p>
+    <div class="table-wrap">
+    <table id="compareTable" class="data">
+        <thead><tr>
+            <th class="num">Published length</th>
+            <th class="num">Length</th>
+            <th class="num">Score</th>
+            <th class="num">Bands in tuner range</th>
+            <th>Worst band</th>
+            <th>Nearest suggestion</th>
+        </tr></thead>
+        <tbody></tbody>
+    </table>
+    </div>
+</section>
+
+<section>
+    <h2 id="bandTitle">Band by band</h2>
+    <div class="table-wrap">
+    <table id="bandTable" class="data">
+        <thead><tr>
+            <th>Band</th>
+            <th>Frequencies</th>
+            <th class="num" title="Band score: average mark across the band, 0 to 100.">Score</th>
+            <th class="num" title="SWR on the coax after the transformer, lowest to highest across the band.">SWR</th>
+            <th class="num" title="Magnitude of the feedpoint impedance before the transformer, lowest to highest across the band.">Feedpoint |Z|</th>
+            <th class="num">In tuner range</th>
+            <th>Note</th>
+        </tr></thead>
+        <tbody></tbody>
+    </table>
+    </div>
+</section>
+
+<section class="about">
+    <h2>How the score works</h2>
+    <table class="data key">
+        <thead><tr><th>Band score</th><th>SWR across the band</th></tr></thead>
+        <tbody>
+            <tr><td>Near 100</td><td>Well within your tuner's SWR limit</td></tr>
+            <tr><td>50</td><td>About at the tuner's limit</td></tr>
+            <tr><td>Near 0</td><td>Well beyond the tuner's limit</td></tr>
+        </tbody>
+    </table>
+    <p>For each wire length, the calculator models the feedpoint impedance at several frequencies across each selected band, including the band edges. It divides the impedance by the matching ratio (9 for a 9:1 unun) and calculates the SWR on 50 ohm coax. Each frequency gets a mark from 0 to 1 compared with the tuner's limit. The band score is the average mark across the band, times 100. The overall score is the average of the band scores.</p>
+    <p>Suggested lengths are the best-scoring lengths in the length range. A length within the minimum spacing of a higher-scoring suggestion is left out, so near-identical lengths are listed once.</p>
+
+    <h2>Model accuracy and limits</h2>
+    <p>SWR figures are typically within 15 to 20% of NEC-2 simulations. The lengths where the SWR peaks and dips line up closely with the NEC results. The results have not been compared with real-world measurements.</p>
+    <p><b>Not modelled:</b></p>
+    <ul>
+        <li>coax loss</li>
+        <li>common-mode current on the coax (the coax shield acting as part of the counterpoise)</li>
+        <li>unun losses</li>
+        <li>nearby objects</li>
+        <li>bends, and wire shapes other than the simulated one</li>
+        <li>variations in real ground</li>
+    </ul>
+    <p><b>Method:</b> the wire and the counterpoise are treated as two lossy open-ended transmission lines in series, a standard approximation. Radiation resistance comes from the textbook formula for a sinusoidal current distribution. The constants were fitted to NEC-2 simulations (PyNEC) of a sloping end-fed wire over average ground: feedpoint 1.5 m up, wire rising to 4, 8 or 12 m and then running level, counterpoise 2.5, 5 or 10 m.</p>
+    <p><b>What the simulations showed:</b></p>
+    <ul>
+        <li>Wire height made little difference.</li>
+        <li>Counterpoise length made a large difference. A counterpoise close to half a wavelength on a band raises the SWR on that band at every wire length.</li>
+        <li>Through a 9:1 unun, the worst SWR is usually at lengths just longer than each multiple of a half wavelength, where the impedance is low and strongly capacitive. It is not exactly at the half-wave points.</li>
+    </ul>
+    <p><a href="https://github.com/pengowray/random-wire-calc/tree/main/model">Simulation details and data</a></p>
+
+    <h2>Notes about random wire (long wire) antennas</h2>
     <ul>
         <li>Usually longer than 1/4λ at the lowest operating frequency</li>
         <li>Suited for low-power operating</li>
         <li>Aim to be non-resonant on any particular frequency</li>
-        <li>Requires a 9:1 unun</li>
+        <li>Usually fed with a 9:1 unun</li>
         <li>A counterpoise (or multiple counterpoises) is recommended</li>
         <li>Typically requires an antenna tuner to achieve a match</li>
-        <li>Efficiency decreases the wire is made very long or installed closer to earth</li>
+        <li>Efficiency decreases when the wire is installed closer to earth</li>
         <li>Check with other sources for authoritative information</li>
     </ul>
-</div> 
+</section>
+</main>
 
 <footer>
-    <p>Long-wire calculator. Developed by Pengo VK3PGO. Inspired by Jack Clarke, VE3EED (SK). This work is licensed under a Creative Commons Attribution 4.0 International License or MIT. | Built with Plotly.js | <a href="https://github.com/pengowray/random-wire-calc">Readme and details on github</a></p>
-    <p>
-    <a href="https://github.com/pengowray/random-wire-calc">
-      <img src="https://img.shields.io/badge/View%20on-GitHub-brightgreen" alt="View on GitHub">
-    </a>
-    </p>
+    <p>Random wire calculator by Pengo VK3PGO. Inspired by Jack Clarke, VE3EED (SK). Licensed under Creative Commons Attribution 4.0 International or MIT. Built with Plotly.js and PyNEC. <a href="https://github.com/pengowray/random-wire-calc">Readme and source on GitHub</a>.</p>
 </footer>
-
-<script>
-const speedOfLight = 299792458;
-
-// https://www.balundesigns.com/content/Wire%20Lengths%20for%204%20and%209-1%20ununs.pdf [date?] found via https://youtu.be/xfqlun3bdI0?t=86 [2017] "53 59 72 88.5 98.5 124.5 135 146 162 175"
-
-const presets = {
-    "VE3EED": {
-        // reprinted in: SARC Communicator 2018-11 https://archive.org/details/SARC_Communicator_2018-11/
-        name : "Jack VE3EED recommendations",
-        feet:  "29  35.5  41  58  71  84  107  119  148  203  347  407  423",
-        count: 13
-    },
-    "balundesigns1": {
-        name: "Balun Designs recommendations: 160m through 10m",
-        feet: "53 59 72 88.5 98.5 124.5 146 162 175",
-        count: 9
-    },
-    "balundesigns2": {
-        name: "Balun Designs recommendations: limited to 40m through 6m",
-        feet: "36 44 49",
-        count: 3
-    },
-    "balundesigns3": {
-        // 160m through 10m (alternative lengths if all others fail)
-        name: "Balun Designs alternative lengths: 160m through 10m (if all others fail)",
-        feet:  "58 71 84 107 119 148 203",
-        count: 7
-    },
-    "qrpguys4010": {
-        name: "QRPGuys 40m-10m UnUnTenna 9:1",
-        feet: "41 35.5 29",
-        // counterpoise: 
-    },
-    "sparc": {
-        //https://sparc.asn.au/2022/04/22/random-wire-eflw-antenna-designs/
-        //Author: Steven VK3TR
-        //TODO: add #2 ranks too; separate out 0/1/2 with different colours; double check numbers
-        name: "SPARC VK3BSP blog (#0 and #1)",
-        feet: "41 43 62 64 112 125 126 166 167 202 223 225 226 251 310 318 320 261 400 402 423",
-    },
-    "sprott_feet": {
-        // https://sprott.physics.wisc.edu/technote/randwire.htm - todo: use mhz
-        name: "J. C. Sprott recommended lengths (feet)",
-        feet: "281 229 213 198 196 194 180 176 165 159 148 143 112 107 99 98 95 90 82 80 74 63 57 53 49 48 42 37 30 25 21 19",
-
-        //TODO: new format
-        wires: {
-            "all": {
-                lens: "281 229 213 198 196 194 180 176 165 159 148 143 112 107 99 98 95 90 82 80 74 63 57 53 49 48 42 37 30 25 21 19",
-                units: 'feet',
-                description: "gaps in the quarter-wavelength frequency spectrum over the range 0-30 MHz in 10 Hz steps where such resonances would be absent and the corresponding required electrical lengths of the antenna.",
-            },
-            "shortest": {
-                lens: "143",
-                units: 'feet',
-                description: "The shortest antenna that has a chance of tuning all bands has an electrical length of 143 [feet]",
-                color: "green",
-                override: true,
-            }
-        }
-    }
-    // - aliexpress special includes 16.5m antenna, 10m ground
-    // - blog: "I measured out 21.6 m of wire (which for ✨magic✨ reasons seem to be a good universal antenna length)…" // https://blinry.org/50-things-with-sdr/
-    // - " A standard recommendation for the 40m band (see QST, March 1936, p. 32, "An Unorthodox Antenna") is an 84' long end fed and a 17' long counterpoise (6.5' for 20m)." -- https://udel.edu/~mm/ham/randomWire/
-    // - "A counterpoise is simply a long, insulated wire that attaches to the ground connection on your antenna tuner. The best counterpoise is 1/4-wavelength at the lowest frequency you intend to use. That’s a lot of wire at, say, 3.5 MHz, but you can loop the wire around the room and hide it from view. " -- https://www.arrl.org/random-wires
-};
-
-for (const p in presets) {
-    presets[p].count = presets[p].feet.split(' ').filter(num => num).length;
-}
-
-
-var preset = presets['VE3EED'];
-
-const maxDisplayFreq = 1.6; // gets vf applied to it
-const metersPerFoot = 0.3048;
-const feetPerMeter = 1 / metersPerFoot;
-const vfc = 1.0; // no velocity factor; constant vf for display; for when vf not needed or already calculated
-
-const frequencyRanges = {
-    "160m": [1.8, 2.0],
-    "80m": [3.5, 4.0],
-    "60m": [5.3, 5.4],
-    "40m": [7.0, 7.3],
-    "30m": [10.1, 10.15],
-    "20m": [14.0, 14.35],
-    "17m": [18.068, 18.168],
-    "15m": [21.0, 21.45],
-    "12m": [24.89, 24.99],
-    "10m": [28.0, 29.7],
-    "6m": [50.0, 54.0]
-};
-
-const allBands = Object.keys(frequencyRanges);
-const allBandsSet = new Set(allBands);
-
-const defaultSettings = {
-    preset: 'calc',
-    velocityFactor: 0.95,
-    numResults: 25,
-    minWireLength: 7,
-    maxWireLength: 200,
-    hzUnits: false,
-    logarithmic: true,
-    bands: null
-};
-
-let suppressHashUpdate = false;
-
-const lastCalculatedLengths = {
-    min: { meters: defaultSettings.minWireLength, preferFeet: false },
-    max: { meters: defaultSettings.maxWireLength, preferFeet: false }
-};
-
-const factors = [
-    { value: 1/2, penalty: 10, type: 'fraction', valtext: '0.5λ', plain: "1/2", }, // '½'
-    //{ value: 1/3, penalty: 3, type: 'fraction', valtext: 'λ/3', plain: "1/3", },
-    { value: 1/4, penalty: 9, type: 'fraction', valtext: "0.25λ", plain: "1/4" }, // '¼' '1/4' // valtext defaults to "0.25λ" anyway
-    //{ value: 1/5, penalty: 4, type: 'fraction', valtext: 'λ/5', plain: "1/5" },
-    //{ value: 1/6, penalty: 3, type: 'fraction', valtext: 'λ/6', plain: "1/6" },
-    //{ value: 1/7, penalty: 3, type: 'fraction', valtext: 'λ/7', plain: "1/7" },
-    //{ value: 1/8, penalty: 1, type: 'fraction', valtext: 'λ/8', plain: "1/8" }, // , valtext: '⅛' 
-    //{ value: 1/16, penalty: 1, type: 'fraction', valtext: 'λ/16', plain: "1/16" }, 
-    { value: 3/4, penalty: 5, type: 'fraction', valtext: '0.75λ', plain: "3/4" },
-    //{ value: 5/8, penalty: 6, type: 'fraction' },
-    //{ value: 2/3, penalty: 5, type: 'fraction' },
-    //{ value: 2/5, penalty: 4, type: 'fraction' },
-    { value: 1, penalty: 7, type: 'whole', highlight: true },
-    { value: 1.5, pentaly: 4, type: 'fraction', valtext: '1.5λ', plain: "3/2"},
-    { value: 2, penalty: 6, type: 'multiple' },
-    { value: 3, penalty: 5, type: 'multiple' },
-    { value: 4, penalty: 4, type: 'multiple' },
-    { value: 5, penalty: 3, type: 'multiple' },
-    { value: 6, penalty: 2, type: 'multiple' },
-    { value: 7, penalty: 2, type: 'multiple' },
-    { value: 8, penalty: 1, type: 'multiple' },
-    { value: 9, penalty: 1, type: 'multiple' },
-    { value: 10, penalty: 1, type: 'multiple' },
-    { value: 11, penalty: 0.6, type: 'multiple' },
-    { value: 12, penalty: 0.6, type: 'multiple' },
-    { value: 13, penalty: 0.6, type: 'multiple' },
-    { value: 14, penalty: 0.6, type: 'multiple' },
-    { value: 15, penalty: 0.6, type: 'multiple' },
-    /*
-    { value: 16, penalty: 0.6, type: 'multiple' },
-    { value: 17, penalty: 0.6, type: 'multiple' },
-    { value: 18, penalty: 0.6, type: 'multiple' },
-    { value: 19, penalty: 0.6, type: 'multiple' },
-    { value: 20, penalty: 0.6, type: 'multiple' }
-    */
-];
-//set valtext for all
-for (let factor of factors) {
-    if (!factor.valtext) {
-        factor.valtext = factor.type === 'fraction' ? `${factor.value.toFixed(2)}λ` : `${factor.value.toFixed(0)}λ`;
-    }
-}
-
-//let currentUnit = 'meters';
-let currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
-let presetMode = false;
-
-function calculateWavelength(freq, vf) {
-    return (speedOfLight * vf) / (freq * 1e6);
-}
-
-function calculateFrequency(length, vf) {
-    return (speedOfLight * vf) / (length * 1e6);
-}
-
-function formatNumber(value, precision = 3) {
-    if (!Number.isFinite(value)) {
-        return '';
-    }
-    let str = value.toFixed(precision);
-    if (str.includes('.')) {
-        str = str.replace(/0+$/, '').replace(/\.$/, '');
-    }
-    return str;
-}
-
-function interpretLengthInput(rawValue, fallbackMeters) {
-    if (typeof rawValue !== 'string') {
-        return { meters: fallbackMeters, isFeet: false, valid: false };
-    }
-
-    const trimmed = rawValue.trim();
-    if (!trimmed) {
-        return { meters: fallbackMeters, isFeet: false, valid: false };
-    }
-
-    const lower = trimmed.toLowerCase();
-    const hasFeet = /(ft\.?\b|feet\b|foot\b|['’′])/i.test(lower);
-    const hasInches = /("|”|″|in\b)/i.test(lower);
-    const numbers = trimmed.match(/[-+]?\d*\.?\d+/g);
-
-    if (!numbers) {
-        return { meters: fallbackMeters, isFeet: false, valid: false };
-    }
-
-    if (hasFeet) {
-        const feetValue = parseFloat(numbers[0]);
-        if (!Number.isFinite(feetValue)) {
-            return { meters: fallbackMeters, isFeet: false, valid: false };
-        }
-        let inchesValue = 0;
-        if (hasInches && numbers.length > 1) {
-            const parsedInches = parseFloat(numbers[1]);
-            if (Number.isFinite(parsedInches)) {
-                inchesValue = parsedInches;
-            }
-        }
-        const meters = (feetValue + inchesValue / 12) * metersPerFoot;
-        return { meters, isFeet: true, valid: true };
-    }
-
-    const numericValue = parseFloat(numbers[0]);
-    if (!Number.isFinite(numericValue)) {
-        return { meters: fallbackMeters, isFeet: false, valid: false };
-    }
-
-    return { meters: numericValue, isFeet: false, valid: true };
-}
-
-function formatLengthForHash(meters, preferFeet) {
-    if (!Number.isFinite(meters)) {
-        return '';
-    }
-    if (preferFeet) {
-        const feetValue = meters * feetPerMeter;
-        const roundedFeet = Math.round(feetValue);
-        if (Math.abs(feetValue - roundedFeet) < 1e-3) {
-            return `${roundedFeet}ft`;
-        }
-        return `${formatNumber(feetValue, 2)}ft`;
-    }
-    const roundedMeters = Math.round(meters);
-    if (Math.abs(meters - roundedMeters) < 1e-6) {
-        return `${roundedMeters}m`;
-    }
-    return `${formatNumber(meters, 3)}m`;
-}
-
-function getSelectedBandsSet() {
-    const selected = new Set();
-    for (const band of allBands) {
-        const checkbox = document.getElementById(band);
-        if (checkbox && checkbox.checked) {
-            selected.add(band);
-        }
-    }
-    return selected;
-}
-
-function setsEqual(a, b) {
-    if (!a || !b) {
-        return false;
-    }
-    if (a.size !== b.size) {
-        return false;
-    }
-    for (const value of a) {
-        if (!b.has(value)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-function updateHashFromState() {
-    if (suppressHashUpdate) {
-        return;
-    }
-
-    const params = new URLSearchParams();
-    const presetSelect = document.getElementById('preset');
-    const presetValue = presetSelect.value;
-
-    const vfValue = parseFloat(document.getElementById('velocityFactor').value);
-    if (Number.isFinite(vfValue) && Math.abs(vfValue - defaultSettings.velocityFactor) > 1e-4) {
-        params.set('vf', formatNumber(vfValue, 3));
-    }
-
-    const axisHz = document.getElementById('hzUnits').checked;
-    if (axisHz !== defaultSettings.hzUnits) {
-        params.set('axis', axisHz ? 'hz' : 'm');
-    }
-
-    const logarithmic = document.getElementById('logarithmic').checked;
-    if (logarithmic !== defaultSettings.logarithmic) {
-        params.set('scale', logarithmic ? 'log' : 'linear');
-    }
-
-    const selectedBands = getSelectedBandsSet();
-    if (defaultSettings.bands && !setsEqual(selectedBands, defaultSettings.bands)) {
-        if (selectedBands.size === allBandsSet.size) {
-            params.set('bands', 'all');
-        } else if (selectedBands.size === 0) {
-            params.set('bands', 'none');
-        } else {
-            const ordered = Array.from(selectedBands).sort((a, b) => allBands.indexOf(a) - allBands.indexOf(b));
-            params.set('bands', ordered.join('-'));
-        }
-    }
-
-    if (presetValue !== defaultSettings.preset && (presetValue === 'calc' || presetValue in presets)) {
-        params.set('preset', presetValue);
-    }
-
-    if (presetValue === 'calc') {
-        const numResultsValue = parseInt(document.getElementById('numResults').value, 10);
-        if (Number.isFinite(numResultsValue) && numResultsValue !== defaultSettings.numResults) {
-            params.set('results', numResultsValue);
-        }
-
-        const minLength = lastCalculatedLengths.min;
-        const maxLength = lastCalculatedLengths.max;
-        const lengthsDiffer = Math.abs(minLength.meters - maxLength.meters) > 1e-6;
-
-        if (lengthsDiffer) {
-            if (Math.abs(minLength.meters - defaultSettings.minWireLength) > 1e-6) {
-                params.set('min', formatLengthForHash(minLength.meters, minLength.preferFeet));
-            }
-            if (Math.abs(maxLength.meters - defaultSettings.maxWireLength) > 1e-6) {
-                params.set('max', formatLengthForHash(maxLength.meters, maxLength.preferFeet));
-            }
-        } else {
-            const differsFromDefaultMin = Math.abs(minLength.meters - defaultSettings.minWireLength) > 1e-6;
-            const differsFromDefaultMax = Math.abs(maxLength.meters - defaultSettings.maxWireLength) > 1e-6;
-            const defaultsEqual = Math.abs(defaultSettings.minWireLength - defaultSettings.maxWireLength) <= 1e-6;
-            if (differsFromDefaultMin || differsFromDefaultMax || !defaultsEqual) {
-                const preferFeet = minLength.preferFeet || maxLength.preferFeet;
-                params.set('wire', formatLengthForHash(minLength.meters, preferFeet));
-            }
-        }
-    } else if (presetValue in presets) {
-        const presetDetails = presets[presetValue];
-        if (presetDetails) {
-            const resultsPresetValue = parseInt(document.getElementById('numResultsPreset').value, 10);
-            if (Number.isFinite(resultsPresetValue) && resultsPresetValue !== presetDetails.count) {
-                params.set('results', resultsPresetValue);
-            }
-        }
-    }
-
-    const hashString = params.toString();
-    const newUrl = window.location.pathname + window.location.search + (hashString ? '#' + hashString : '');
-    history.replaceState(null, '', newUrl);
-}
-
-function applySettingsFromHash() {
-    const rawHash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
-    if (!rawHash) {
-        // Reset to defaults when no hash present
-        const presetSelect = document.getElementById('preset');
-        presetSelect.value = defaultSettings.preset;
-        document.getElementById('velocityFactor').value = formatNumber(defaultSettings.velocityFactor, 3) || defaultSettings.velocityFactor.toString();
-        document.getElementById('hzUnits').checked = defaultSettings.hzUnits;
-        document.getElementById('logarithmic').checked = defaultSettings.logarithmic;
-        document.getElementById('numResults').value = defaultSettings.numResults;
-        document.getElementById('numResultsPreset').value = defaultSettings.numResults;
-        document.getElementById('minWireM').value = String(defaultSettings.minWireLength);
-        document.getElementById('maxWireM').value = String(defaultSettings.maxWireLength);
-        if (defaultSettings.bands) {
-            allBands.forEach(band => {
-                const checkbox = document.getElementById(band);
-                if (checkbox) {
-                    checkbox.checked = defaultSettings.bands.has(band);
-                }
-            });
-        }
-        return;
-    }
-
-    const params = new URLSearchParams(rawHash);
-    const presetParam = params.get('preset');
-    const presetSelect = document.getElementById('preset');
-    if (presetParam && (presetParam === 'calc' || presetParam in presets)) {
-        presetSelect.value = presetParam;
-    } else {
-        presetSelect.value = defaultSettings.preset;
-    }
-
-    const vfParam = params.get('vf');
-    if (vfParam !== null) {
-        document.getElementById('velocityFactor').value = vfParam;
-    } else {
-        document.getElementById('velocityFactor').value = formatNumber(defaultSettings.velocityFactor, 3) || defaultSettings.velocityFactor.toString();
-    }
-
-    const axisParam = params.get('axis');
-    if (axisParam !== null) {
-        document.getElementById('hzUnits').checked = axisParam === 'hz';
-    } else {
-        document.getElementById('hzUnits').checked = defaultSettings.hzUnits;
-    }
-
-    const scaleParam = params.get('scale');
-    if (scaleParam !== null) {
-        document.getElementById('logarithmic').checked = scaleParam !== 'linear';
-    } else {
-        document.getElementById('logarithmic').checked = defaultSettings.logarithmic;
-    }
-
-    const resultsParam = params.get('results');
-    const presetValue = presetSelect.value;
-    const defaultResults = presetValue === 'calc' ? defaultSettings.numResults : (presets[presetValue] ? presets[presetValue].count : defaultSettings.numResults);
-    if (resultsParam !== null) {
-        const parsedResults = parseInt(resultsParam, 10);
-        if (Number.isFinite(parsedResults)) {
-            document.getElementById('numResults').value = parsedResults;
-            document.getElementById('numResultsPreset').value = parsedResults;
-        }
-    } else {
-        document.getElementById('numResults').value = defaultResults;
-        document.getElementById('numResultsPreset').value = defaultResults;
-    }
-
-    const minInput = document.getElementById('minWireM');
-    const maxInput = document.getElementById('maxWireM');
-    if (params.has('wire')) {
-        const wireValue = params.get('wire');
-        if (wireValue !== null) {
-            minInput.value = wireValue;
-            maxInput.value = wireValue;
-        }
-    } else {
-        if (params.has('min')) {
-            minInput.value = params.get('min');
-        } else {
-            minInput.value = String(defaultSettings.minWireLength);
-        }
-        if (params.has('max')) {
-            maxInput.value = params.get('max');
-        } else {
-            maxInput.value = String(defaultSettings.maxWireLength);
-        }
-    }
-
-    if (params.has('bands')) {
-        const bandParam = params.get('bands');
-        if (bandParam === 'all') {
-            allBands.forEach(band => {
-                const checkbox = document.getElementById(band);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
-        } else if (bandParam === 'none') {
-            allBands.forEach(band => {
-                const checkbox = document.getElementById(band);
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            });
-        } else if (bandParam) {
-            const targetBands = new Set(bandParam.split('-').filter(Boolean));
-            allBands.forEach(band => {
-                const checkbox = document.getElementById(band);
-                if (checkbox) {
-                    checkbox.checked = targetBands.has(band);
-                }
-            });
-        }
-    } else if (defaultSettings.bands) {
-        allBands.forEach(band => {
-            const checkbox = document.getElementById(band);
-            if (checkbox) {
-                checkbox.checked = defaultSettings.bands.has(band);
-            }
-        });
-    }
-}
-
-function findConflicts(length, selectedBands, factors, vf) {
-    const conflicts = new Set();
-    for (const [band, [startFreq, endFreq]] of Object.entries(frequencyRanges)) {
-        if (selectedBands.some(([selectedBand]) => selectedBand === band)) {
-            const minElectricalWavelength = calculateWavelength(endFreq, vf);
-            const maxElectricalWavelength = calculateWavelength(startFreq, vf);
-            for (const { value, type, penalty, valtext } of factors) {
-                const minLength = minElectricalWavelength * value;
-                const maxLength = maxElectricalWavelength * value;
-                if (length >= minLength && length <= maxLength) { //  && maxWavelength * value <= calculateWavelength(maxDisplayFreq, vf)
-                    const startFreqMHZ = (endFreq * value).toFixed(2);
-                    const endFreqMHZ = (startFreq * value).toFixed(2);
-                    conflicts.add( {band, text: `${band} ${valtext}`, value, type, penalty, valtext } );
-                }
-            }
-        }
-    }
-    return Array.from(conflicts);
-}
-
-function MinBand(length, vf) {
-    // find min band (e.g 20m), which length is at least 1/4 wavelength:
-    const minBands = Object.entries(frequencyRanges).find(([band, [startFreq, endFreq]]) => {
-        const minElectricalWavelength = calculateWavelength(endFreq, vf);
-        return length >= minElectricalWavelength / 4;
-    });
-    
-    return minBands ? minBands[0] : '';
-
-}
-function MinBandText(length, vf, selectedBands, conflicts) {
-    //length = wavelength with vf already applied
-    //vf = velocity factor to apply to bands
-
-    const wavelengthMultiples = [
-        { value: 1, text: 'this wire is longer than λ' },
-        { value: 0.75, text: 'this wire is longer than 0.75λ' },
-        { value: 0.5, text: 'this wire is longer than λ/2' },
-        { value: 0.25, text: 'this wire is longer than λ/4' }
-    ];
-
-    const count = -1; // how many to show, -1 for all.
-    
-    const cbands = selectedBands; // (in an array)
-    //const cbands = Object.entries(frequencyRanges);
-
-    const okBands = cbands.filter(([band, [startFreq, endFreq]]) => {
-        const minElectricalWavelength = calculateWavelength(endFreq, vf);
-        return length >= minElectricalWavelength / 4;
-    });
-    const bandDetails = okBands.map(([band, [startFreq, endFreq]]) => {
-        const minElectricalWavelength = calculateWavelength(endFreq, vf);
-        const maxElectricalWavelength = calculateWavelength(startFreq, vf);
-        //const minBand = MinBand(length, vf);
-        //const minBandText = minBand ? `${minBand} 0.25λ` : '';
-
-        const conflict = conflicts.find(obj => obj.band === band);
-        const conflictText = conflict ? `Intersects ${conflict.text}` : '';
-
-        const wavelengthMultiple = wavelengthMultiples.find(multiple => length >= maxElectricalWavelength * multiple.value);
-        const waveLengthText = wavelengthMultiple ? wavelengthMultiple.text : '';
-
-        return [band, {startFreq, endFreq, conflict, conflictText, waveLengthText} ];
-    });
-    //console.log('band deetails: ', bandDetails);
-    if (count >= 0) {
-        return formatBands(bandDetails.slice(0, count), count);
-    } else {
-        // show all
-        return formatBands(bandDetails, count);
-    }
-}
-
-function formatBands(bandDetails, count) {
-    //0: Object { band: "60m", text: "60m 0.25λ", value: 0.25, … }
-    return bandDetails ? bandDetails.map(([band, b]) => {
-        console.log('band: ', b);
-
-        const span = `<span ${b.conflict ? `title="${b.conflictText}"` : `title="For ${band} ${b.waveLengthText}"`}>${band}${b.conflict ? `*` : ``}</span>`;
-        return span;
-    }).join(', ') + ((bandDetails.length > count && count != -1) ? ', ...' : '') : '';
-}
-
-function calculate() {
-    const vf = parseFloat(document.getElementById('velocityFactor').value);
-    const numResultsInput = document.getElementById('numResults');
-    const numResultsInputPreset = document.getElementById('numResultsPreset');
-    const logarithmic = document.getElementById('logarithmic').checked;
-    const selectedBands = Object.entries(frequencyRanges).filter(([band]) => document.getElementById(band).checked);
-    const minWireInput = document.getElementById('minWireM');
-    const maxWireInput = document.getElementById('maxWireM');
-    const minParsed = interpretLengthInput(minWireInput.value, defaultSettings.minWireLength);
-    const maxParsed = interpretLengthInput(maxWireInput.value, defaultSettings.maxWireLength);
-    let minWireLen = minParsed.meters;
-    let maxWireLen = maxParsed.meters;
-
-    if (!Number.isFinite(minWireLen) || minWireLen < 0) {
-        minWireLen = defaultSettings.minWireLength;
-    }
-    if (!Number.isFinite(maxWireLen) || maxWireLen < 0) {
-        maxWireLen = defaultSettings.maxWireLength;
-    }
-    if (maxWireLen < minWireLen) {
-        maxWireLen = minWireLen;
-    }
-
-    const lengthsEqual = Math.abs(maxWireLen - minWireLen) < 1e-9;
-    const sharedFeetPreference = (minParsed.isFeet || maxParsed.isFeet) && lengthsEqual;
-    lastCalculatedLengths.min = { meters: minWireLen, preferFeet: sharedFeetPreference ? true : minParsed.isFeet };
-    lastCalculatedLengths.max = { meters: maxWireLen, preferFeet: sharedFeetPreference ? true : maxParsed.isFeet };
-
-    const presetChoice = document.getElementById('preset').value;
-    let numResults = 10;
-
-    presetMode = presetChoice === 'calc' ? false : true;
-    minWireInput.disabled = presetMode;
-    maxWireInput.disabled = presetMode;
-
-    if (presetMode) {
-        preset = presets[presetChoice];
-        numResultsInputPreset.value = preset.count;
-        numResultsInputPreset.disabled = true;
-        numResultsInput.classList.add('hidden');
-        numResultsInputPreset.classList.remove('hidden');
-        numResults = preset.count;
-
-    } else {
-        numResultsInputPreset.classList.add('hidden');
-        numResultsInput.classList.remove('hidden');
-        numResults = parseInt(numResultsInput.value);
-    }
-
-    if (presetMode) {
-        
-        //const ve3eedLengthsFt = presets.split(' ').filter(num => num).map(Number);
-        //var presetChoice = document.getElementById('preset').value;
-        //var preset = presets[presetChoice].feet;
-        const presetLensFt = preset.feet.split(' ').filter(num => num);
-        
-        const scoredPresetLens = presetLensFt.map((ft, index) => {
-            const length = Number(ft) * metersPerFoot;
-            const conflicts = findConflicts(length, selectedBands, factors, vf);
-            const minBand = MinBand(length, vf);
-            const minBandText = MinBandText(length, vf, selectedBands, conflicts);
-            let score = 0;
-            conflicts.forEach(conflict => {
-                score -= conflict.penalty;
-            });
-            return { length, conflicts, score, minBand, minBandText, originalIndex: index + 1, ft };
-        });
-
-        scoredPresetLens.sort((a, b) => b.score - a.score);
-
-        const results = scoredPresetLens.map((result, index) => {
-            const length = result.length;
-            return {
-                pos: result.originalIndex, // lengthToPosMap[result.mid],
-                rank: index + 1,
-                length: `${length.toFixed(3)} m`,
-                size: `${result.ft} ft`,
-                conflictsText: result.conflicts.map(o => o.text).join(', '),
-                minBand: result.minBand,
-                minBandText: result.minBandText,
-                score: result.score,
-                originalIndex: result.originalIndex
-            };
-        });
-
-        plotResults(selectedBands, results, vf, logarithmic, true);
-
-        const tableBody = document.getElementById('resultsTable').querySelector('tbody');
-        tableBody.innerHTML = '';
-        results.forEach((result) => {
-            //todo: create hovertext to explain min band
-            
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${result.pos}</td>
-                <td>${result.rank}</td>
-                <td>${result.length}</td>
-                <td>${result.size}</td>
-                <td style="text-align: left;">Usable bands: ${result.minBandText} ${result.conflictsText.length ? '<br>Intersects: ' + result.conflictsText : ''}</td>
-            `;
-            tableBody.appendChild(row);
-        });
-    } else {
-        const avoidSet = new Set();
-        for (const [band, [startFreq, endFreq]] of selectedBands) {
-            for (const freq of [startFreq, endFreq]) {
-                const wavelength = calculateWavelength(freq, vf);
-
-                for (const { value } of factors) {
-                    const length = Math.round(wavelength * value * 1000) / 1000;
-                    //if (length <= calculateWavelength(maxDisplayFreq, vf)) {
-                        avoidSet.add(length);
-                    //}
-                }
-            }
-        }
-
-        const avoidList = Array.from(avoidSet).sort((a, b) => a - b);
-
-        let candidateSegments = [];
-
-        if (Math.abs(maxWireLen - minWireLen) < 1e-9) {
-            candidateSegments.push({ mid: minWireLen, bandwidth: 0 });
-        } else {
-            const relevantAvoid = avoidList.filter(length => length > minWireLen && length < maxWireLen);
-            const boundaries = [minWireLen, ...relevantAvoid, maxWireLen];
-
-            for (let i = 0; i < boundaries.length - 1; i++) {
-                const start = boundaries[i];
-                const end = boundaries[i + 1];
-                if (end <= start) continue;
-                const midPoint = (start + end) / 2;
-                const bandwidth = end - start;
-                candidateSegments.push({ mid: midPoint, bandwidth });
-            }
-
-            if (!candidateSegments.length) {
-                candidateSegments.push({ mid: minWireLen, bandwidth: 0 });
-            }
-        }
-
-        const scoredMidPoints = candidateSegments.map(({ mid, bandwidth }, index) => {
-            const baseScore = bandwidth > 0 ? bandwidth / mid : 0;
-            let score = baseScore;
-            const conflicts = findConflicts(mid, selectedBands, factors, vf);
-            const debugInfo = [];
-            debugInfo.push({ score });
-            conflicts.forEach(conflict => {
-                score -= conflict.penalty;
-                debugInfo.push({ conflict });
-            });
-            console.log(`Midpoint: ${mid.toFixed(3)} m, Score: ${score.toFixed(2)}, Debug Info:`, debugInfo);
-            return { mid, bandwidth, score, conflicts, originalIndex: index + 1 };
-        });
-
-        scoredMidPoints.sort((a, b) => b.score - a.score);
-        const topResults = scoredMidPoints.slice(0, numResults);
-
-        // Create a mapping of the sorted lengths to their position (pos)
-        const lengthSortedResults = [...topResults].sort((a, b) => a.mid - b.mid);
-        const lengthToPosMap = lengthSortedResults.reduce((acc, result, idx) => {
-            acc[result.mid] = idx + 1;
-            return acc;
-        }, {});
-
-        const results = topResults.map((result, index) => {
-            const length = result.mid;
-            const minBand = MinBand(length, vf);
-            const conflicts = findConflicts(length, selectedBands, factors, vf);
-            const minBandText = MinBandText(length, vf, selectedBands, conflicts);
-            const totalFeet = length * feetPerMeter;
-            const feet = Math.floor(totalFeet);
-            const inches = Math.floor((totalFeet - feet) * 12);
-            return {
-                pos: lengthToPosMap[result.mid],
-                rank: index + 1,
-                length: `${length.toFixed(3)} m`,
-                size: `${feet} ft ${inches} in`,
-                minBand,
-                minBandText,
-                conflictsText: conflicts.map(o => o.text).join(', '),
-                score: result.score.toFixed(2),
-                originalIndex: result.originalIndex
-            };
-        });
-
-        plotResults(selectedBands, results, vf, logarithmic, false);
-
-        const tableBody = document.getElementById('resultsTable').querySelector('tbody');
-        tableBody.innerHTML = '';
-        results.forEach((result) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${result.pos}</td>
-                <td>${result.rank}</td>
-                <td>${result.length}</td>
-                <td>${result.size}</td>
-                <td style="text-align: left;">Usable bands: ${result.minBandText} ${result.conflictsText.length ? '<br>Intersects: ' + result.conflictsText : ''}</td>
-            `;
-            tableBody.appendChild(row);
-        });
-    }
-
-    //console.log('Good lengths with conflicts:', typeof results !== 'undefined' ? results : 'results is not defined');
-
-    sortTable(0);
-    updateHashFromState();
-}
-
-function plotResults(selectedBands, results, vf, logarithmic, ve3eedMode) {
-    const traceData = [];
-    selectedBands.forEach(([band, [startFreq, endFreq]], index) => {
-        // electrical length in wire
-        const minWavelength = calculateWavelength(endFreq, vf);
-        const maxWavelength = calculateWavelength(startFreq, vf);
-        // wavelength in space
-        const minWavelengthInSpace = calculateWavelength(endFreq, vfc);
-        const maxWavelengthInSpace = calculateWavelength(startFreq, vfc);
-        
-        for (const { value, type, penalty, highlight, valtext } of factors) {
-            const adjustedFreqMin = startFreq / value;
-            const adjustedFreqMax = endFreq / value;
-            const xValues = currentUnit === 'meters' ? 
-                            [minWavelengthInSpace * value, maxWavelengthInSpace * value] :
-                            [adjustedFreqMin, adjustedFreqMax];
-            const col = highlight ? '#2C3E50' : value > 1 ? '#E74C3C' : '#3498AB';
-            const lambda = (value == 1) ? '' : ` ${valtext}`
-            const hovertext = `<b>${band} band${lambda}</b><br>${(adjustedFreqMin).toFixed(2)} to ${(adjustedFreqMax).toFixed(2)} MHz <br><i>λ=${(minWavelengthInSpace * value).toFixed(3)} to ${(maxWavelengthInSpace * value).toFixed(3)} m</i> <br><b>Wire lengths</b> (vf ${vf.toFixed(2)}):<br>${(minWavelength * value).toFixed(3)} – ${(maxWavelength * value).toFixed(3)} m`;
-
-            if ((maxWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) || minWavelength * value <= calculateFrequency(maxDisplayFreq, vf)) { 
-                traceData.push({
-                    x: xValues,
-                    y: [index + 1, index + 1],
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    line: { shape: 'linear', width: 35, color: col },
-                    marker: { // marker is a vertical line, just to make boxes visible when too thin to be rendered
-                        size: 20,
-                        symbol: 'line-ns', // vert line
-                        line: { color : col, width: 1 },
-                        //color: col, // (no fill needed for line-ns)
-                    },
-                    //name: band,
-                    name: `${band} ${valtext}`,
-                    hovertemplate: [hovertext, hovertext]
-                });
-            }
-        }
-    });
-
-    const bestData = results.map((result) => {
-        const electricalLength = parseFloat(result.length) / vf;
-        const freq = calculateFrequency(parseFloat(result.length), vf);
-        const xValue = currentUnit === 'meters' ?  electricalLength : freq;
-        //const labelText = ve3eedMode ? `#${result.pos}: ${result.length} (${result.size})` : `#${result.pos}: ${result.length} (${result.size}) Rank:${result.rank}`;
-        var intersects = '';
-        if (result.conflicts) intersects = `<br><br><b>Intersects:</b><br> ${result.conflicts}`;
-        const nameText = `Wire #${result.pos}`;
-        const labelText = `Wire #${result.pos} <br><br><b>Physical:</b><br>${result.length}<br>${result.size}<br><br><b>Electrical:</b><br>${freq.toFixed(2)} MHz<br><i>λ=${electricalLength.toFixed(3)} m</i> ${intersects}`;
-        //const col = ve3eedMode ? '#AD32AD' : '#22AD22';
-        const col = result.conflicts ? '#aaaaaa' : '#22AD22';
-        const symbol = result.conflicts ? 'circle-open' : 'circle-closed';
-
-        return [
-            {
-                x: [xValue],
-                y: [selectedBands.length + 1],
-                type: 'scatter',
-                mode: 'markers',
-                marker: { color: col, size: 10, symbol },
-                name: nameText,
-                //text: [labelText],
-                hovertemplate: [labelText] // hides redundant "Wire" heading you get with "text"
-            },
-            {
-                x: [xValue],
-                y: [0],
-                type: 'scatter',
-                mode: 'markers',
-                marker: { color: col, size: 2, symbol: 'circle-open' },
-                name: nameText,
-                //text: [labelText],
-                hoverinfo: 'skip'
-            },
-            {
-                x: [xValue, xValue],
-                y: [0, selectedBands.length + 1],
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: col, width: 2, dash: 'dash' },
-                showlegend: false,
-                hoverinfo: 'skip'
-            }
-        ];
-    }).flat();
-
-    const xrange0 = 2;
-    const xrange1 = 180;
-    var xrangeA = [];
-    var xrangeB = []; // second xaxis 
-    var titleA = '';
-    var titleB = '';
-    if (currentUnit === 'meters') {
-        xrangeA = [xrange0, xrange1]
-        xrangeB = [calculateFrequency(xrange0, vfc), calculateFrequency(xrange1, vfc)];
-    } else {
-        xrangeA = [calculateFrequency(xrange1, vfc), calculateFrequency(xrange0, vfc)];
-        xrangeB = [xrange1, xrange0]
-    }
-    if (logarithmic) {
-        xrangeA = [Math.log10(xrangeA[0]), Math.log10(xrangeA[1])];
-        xrangeB = [Math.log10(xrangeB[0]), Math.log10(xrangeB[1])];        
-    }
-    console.log({xrangeA, xrangeB});
-    const dummyTrace = {
-        x: [xrangeB[0], xrangeB[1]],  // Example data range
-        y: [selectedBands.length + 1, selectedBands.length + 1],  // Example position
-        type: 'scatter',
-        mode: 'lines',
-        line: { color: 'rgba(0,0,0,0)' },  // Invisible line
-        xaxis: 'x2',
-        showlegend: false,
-        hoverinfo: 'none'
-    };
-    
-    const layout = {
-        xaxis: {
-            title: currentUnit === 'meters' ? 'Wavelength (meters)' : 'Frequency (MHz)',
-            type: logarithmic ? 'log' : 'linear',
-            range: xrangeA, 
-            side: 'bottom',
-        },
-        xaxis2: {
-            title: currentUnit !== 'meters' ? 'Wavelength (meters)' : 'Frequency (MHz)',
-            type: logarithmic ? 'log' : 'linear',
-            range: xrangeB, 
-            side: 'top',
-            overlaying: 'x',
-            anchor: 'y' 
-        },
-
-        yaxis: {
-            title: 'Bands',
-            tickvals: Array.from({ length: selectedBands.length }, (_, i) => i + 1).concat([selectedBands.length + 1, 0]),
-            ticktext: selectedBands.map(([band]) => band).concat(['Wire', 'Wire']),
-            showticklabels: true,
-            range: [0, selectedBands.length + 2]
-        },
-        showlegend: false
-        
-    };
-
-    Plotly.newPlot('plot', [...bestData, ...traceData, dummyTrace], layout);
-    //Plotly.newPlot('plot', [...bestData, ...traceData], layout);
-}
-
-function toggledUnit() {
-    //currentUnit = currentUnit === 'meters' ? 'hertz' : 'meters';
-    currentUnit = document.getElementById('hzUnits').checked ? 'hertz' : 'meters';
-    
-    calculate();
-}
-
-function sortTable(columnIndex) {
-    const table = document.getElementById('resultsTable');
-    const rows = Array.from(table.rows).slice(1);
-    const sortedRows = rows.sort((a, b) => {
-        const cellA = a.cells[columnIndex].innerText;
-        const cellB = b.cells[columnIndex].innerText;
-        if (columnIndex === 0 || columnIndex === 1 || columnIndex === 2) {  // Numeric columns
-            return parseFloat(cellA) - parseFloat(cellB);
-        }
-        return cellA.localeCompare(cellB);
-    });
-    const tableBody = table.querySelector('tbody');
-    tableBody.innerHTML = '';
-    sortedRows.forEach(row => tableBody.appendChild(row));
-}
-
-function presetUpdated() {
-    calculate();
-}
-
-document.getElementById('logarithmic').addEventListener('change', calculate);
-document.querySelectorAll('.checkboxes input').forEach(checkbox => checkbox.addEventListener('change', calculate));
-document.getElementById('velocityFactor').addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        calculate();
-    }
-});
-document.getElementById('numResults').addEventListener('input', (event) => {
-    calculate();
-});
-document.getElementById('minWireM').addEventListener('input', (event) => {
-    calculate();
-});
-document.getElementById('maxWireM').addEventListener('input', (event) => {
-    calculate();
-});
-document.addEventListener('DOMContentLoaded', () => {
-    if (!defaultSettings.bands) {
-        defaultSettings.bands = getSelectedBandsSet();
-    }
-    suppressHashUpdate = true;
-    applySettingsFromHash();
-    suppressHashUpdate = false;
-    calculate();
-});
-
-window.addEventListener('hashchange', () => {
-    suppressHashUpdate = true;
-    applySettingsFromHash();
-    suppressHashUpdate = false;
-    calculate();
-});
-
-</script>
-
 </body>
 </html>
