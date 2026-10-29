@@ -26,6 +26,9 @@ export function drawChart(el, data, opts, onPick) {
     const ink = css('--ink'), ink2 = css('--ink-2'), grid = css('--grid'), axis = css('--axis');
     const accent = css('--accent'), compare = css('--compare'), surface = css('--surface');
     const { sw, bands, suggestions, checked, presets, range } = data;
+    // On phones the colour bar and toolbar crowd out the plot; the caption above the chart
+    // says what the colours mean.
+    const narrow = el.clientWidth < 600;
     const xs = Array.from(sw.lengths, toX);
     const ft = Array.from(sw.lengths, formatFeetInches);
 
@@ -62,7 +65,7 @@ export function drawChart(el, data, opts, onPick) {
         `${b}: ${x.toFixed(2)} ${unit} (${ft[j]})<br>SWR ${sw.bandSwrMin[bi][j].toFixed(1)} to ${fmtSwr(sw.bandSwrMax[bi][j])}<br>Band score ${sw.bandScores[bi][j].toFixed(0)}`));
     traces.push({
         x: xs, y: bands, z: sw.bandScores.map(a => Array.from(a)), text: hover,
-        type: 'heatmap', zmin: 0, zmax: 100, colorscale: heatScale(), showscale: true,
+        type: 'heatmap', zmin: 0, zmax: 100, colorscale: heatScale(), showscale: !narrow,
         colorbar: {
             title: { text: 'Band score', side: 'right', font: { color: ink2 } },
             tickvals: [0, 50, 100], ticktext: ['0 beyond limit', '50 at limit', '100'],
@@ -89,7 +92,7 @@ export function drawChart(el, data, opts, onPick) {
     const layout = {
         paper_bgcolor: surface, plot_bgcolor: surface,
         font: { family: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: ink2, size: 12 },
-        margin: { l: 56, r: 16, t: 28, b: 48 },
+        margin: narrow ? { l: 44, r: 8, t: 28, b: 44 } : { l: 56, r: 16, t: 28, b: 48 },
         showlegend: true,
         legend: { orientation: 'h', x: 0, y: 1.0, yanchor: 'bottom', font: { color: ink2 } },
         hovermode: 'closest',
@@ -103,7 +106,7 @@ export function drawChart(el, data, opts, onPick) {
         yaxis2: { domain: [0, 0.38], type: 'category', autorange: 'reversed', linecolor: axis, fixedrange: true },
         shapes, annotations,
     };
-    Plotly.react(el, traces, layout, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['select2d', 'lasso2d'] });
+    Plotly.react(el, traces, layout, { responsive: true, displaylogo: false, displayModeBar: narrow ? false : 'hover', modeBarButtonsToRemove: ['select2d', 'lasso2d'] });
     if (!el.dataset.bound) {
         el.dataset.bound = '1';
         el.on('plotly_click', ev => {

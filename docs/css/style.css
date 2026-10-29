@@ -16,6 +16,7 @@
     --critical: #c22f2f;
     --caution-bg: #fbeee6;
     --focus: #2a78d6;
+    --link: #1c5cab; /* darker than --accent so link text clears 4.5:1 on every surface */
 }
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -32,8 +33,9 @@
         --accent-wash: rgba(57, 135, 229, 0.16);
         --compare: #9085e9;
         --critical: #e66767;
-        --caution-bg: #2a1f19;
+        --caution-bg: #211a16;
         --focus: #5598e7;
+    --link: #6da7ec;
     }
 }
 :root[data-theme="dark"] {
@@ -50,8 +52,9 @@
     --accent-wash: rgba(57, 135, 229, 0.16);
     --compare: #9085e9;
     --critical: #e66767;
-    --caution-bg: #2a1f19;
+    --caution-bg: #211a16;
     --focus: #5598e7;
+    --link: #6da7ec;
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +68,7 @@ body {
 header, main, footer { max-width: 1200px; margin: 0 auto; }
 h1 { font-size: 1.6rem; margin: 20px 0 4px; }
 h2 { font-size: 1.15rem; margin: 28px 0 8px; }
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 ::selection { background: var(--accent-wash); }
@@ -94,19 +97,20 @@ legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
 
 .setting-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 12px 24px;
     margin-bottom: 8px;
 }
 .setting-grid > label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .setting-grid > label > * { font-weight: 400; }
 .setting-grid > label.check { flex-direction: row; align-items: center; font-weight: 400; }
-label.inline { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
-label.inline select { font-weight: 400; }
+label.inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; max-width: 100%; }
+label.inline select { font-weight: 400; min-width: 0; }
 .range-inputs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .range-inputs input { width: 6em; }
 .unit { color: var(--ink-2); }
-.field-note { color: var(--muted); font-size: 0.88rem; font-weight: 400; min-height: 1.2em; }
+.field-note { color: var(--muted); font-size: 0.88rem; font-weight: 400; }
+.field-note:empty { display: none; }
 
 input, select, button { font: inherit; color: inherit; }
 input[type="text"], input[type="number"], select {
@@ -123,7 +127,7 @@ input[aria-invalid="true"] { border-color: var(--critical); }
 details.more { margin: 4px 0; }
 details.more summary { cursor: pointer; color: var(--ink-2); padding: 4px 0; }
 details.more[open] summary { margin-bottom: 8px; }
-.link-button { background: none; border: 0; padding: 4px 0; color: var(--accent); cursor: pointer; }
+.link-button { background: none; border: 0; padding: 4px 0; color: var(--link); cursor: pointer; }
 .link-button:hover { text-decoration: underline; }
 
 .check-row {
