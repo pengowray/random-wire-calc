@@ -271,13 +271,13 @@ function renderChart() {
     const altTxt = alt && alt.best
         ? ` With ${cpNameLower(alt.cp)}: ${formatBoth(alt.best.lengthM, s.units)}, score ${alt.best.score.toFixed(0)}.` : '';
     $('chartSummary').textContent = top
-        ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}${withCp}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}.${altTxt} Lower panel: each band's score; blue is inside your tuner's limit, red is beyond it.`
+        ? `Best length between ${fmtLen(s.min)} and ${fmtLen(s.max)}${withCp}: ${formatBoth(top.lengthM, s.units)}, score ${top.score.toFixed(0)}.${altTxt} Lower panel: each band's score${withCp}; blue is inside your tuner's limit, red is beyond it.`
         : '';
     drawChart($('plot'), {
         sw, bands: ctx.bands.map(b => b.name), suggestions, presets, checked,
         presetName: PRESETS[s.compare] ? PRESETS[s.compare].name : '', range: { min: s.min, max: s.max },
         scoreName: alt ? `Score with ${cpNameLower(s.setup.counterpoise)}` : 'Score',
-        alt: alt ? { scores: alt.scores, name: `Score with ${cpNameLower(alt.cp)}` } : null,
+        alt: alt ? { scores: alt.scores, name: `Score with ${cpNameLower(alt.cp)}`, best: alt.best } : null,
     }, { units: s.units, log: s.log }, m => { $('checkLen').value = toInput(m); update(); });
 }
 
@@ -286,6 +286,8 @@ function renderSuggestions() {
     const { s, suggestions, details, checked, hopeless, alt } = last;
     const altHead = $('altScoreHead');
     altHead.classList.toggle('hidden', !alt);
+    // While a comparison is shown, the main Score column names its counterpoise too.
+    $('suggestions').querySelector('th[data-sort="score"]').textContent = alt ? `Score with ${cpNameLower(s.setup.counterpoise)}` : 'Score';
     if (alt) {
         altHead.textContent = `Score with ${cpNameLower(alt.cp)}`;
         altHead.title = `Score at this length if the Counterpoise setting is ${cpNameLower(alt.cp)}. All other settings are the same.`;

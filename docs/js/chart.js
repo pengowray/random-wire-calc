@@ -50,6 +50,16 @@ export function drawChart(el, data, opts, onPick) {
             hovertemplate: `%{x:.2f} ${unit} (%{customdata})<br>${data.alt.name} %{y:.0f}<extra></extra>`,
             xaxis: 'x', yaxis: 'y',
         });
+        const b = data.alt.best;
+        if (b) {
+            traces.push({
+                x: [toX(b.lengthM)], y: [b.score], customdata: [formatFeetInches(b.lengthM)],
+                type: 'scatter', mode: 'markers', name: 'Best length, compared setting',
+                marker: { color: compare, size: 9, symbol: 'diamond', line: { color: surface, width: 2 } },
+                hovertemplate: `Best length, ${data.alt.name.replace(/^Score with /, '')}: %{x:.2f} ${unit} (%{customdata})<br>Score %{y:.0f}<extra></extra>`,
+                xaxis: 'x', yaxis: 'y', cliponaxis: false,
+            });
+        }
     }
     traces.push({
         x: suggestions.map(s => toX(s.lengthM)), y: suggestions.map(s => s.score),
